@@ -7,4 +7,6 @@ export interface UploadedFile {
   originalFileName: string;
   size: number;
   uploadedAt: string; // ISO string format
+  owner: string;
+  location: string;
 }
