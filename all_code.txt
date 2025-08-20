@@ -1,6 +1,6 @@
 ﻿===============================================
 PROJE KOD DOSYALARI
-OluÅŸturulma Tarihi: 07/23/2025 14:19:42
+OluÅŸturulma Tarihi: 08/16/2025 23:58:33
 Proje Yolu: C:\Java\my-cloud-storage-frontend
 ===============================================
 
@@ -51,24 +51,68 @@ export default defineConfig({
 DOSYA: .\src\theme.ts
 ===============================================
 
-import { createTheme } from '@mui/material/styles';
+import { createTheme } from "@mui/material/styles";
 
 export const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: "dark",
     primary: {
-      main: '#7e57c2', // A nice purple
+      main: "#6366f1", // Modern indigo
+      light: "#818cf8",
+      dark: "#4f46e5",
     },
     secondary: {
-      main: '#03a9f4', // A light blue
+      main: "#14b8a6", // Modern teal
+      light: "#2dd4bf",
+      dark: "#0d9488",
     },
     background: {
-      default: '#121212',
-      paper: '#1e1e1e',
+      default: "#0f172a", // Dark blue-gray
+      paper: "#1e293b",
+    },
+    error: {
+      main: "#ef4444",
+    },
+    success: {
+      main: "#22c55e",
     },
   },
   typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    h1: {
+      fontWeight: 700,
+    },
+    h2: {
+      fontWeight: 600,
+    },
+    h3: {
+      fontWeight: 600,
+    },
+    h4: {
+      fontWeight: 600,
+    },
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: "none",
+          fontWeight: 600,
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          backgroundImage: "none",
+        },
+      },
+    },
   },
 });
 
@@ -120,6 +164,8 @@ export interface UploadedFile {
   originalFileName: string;
   size: number;
   uploadedAt: string; // ISO string format
+  owner: string;
+  location: string;
 }
 
 
@@ -251,34 +297,61 @@ export const useAuth = () => {
 DOSYA: .\src\pages\DashboardPage.tsx
 ===============================================
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Container, Box, Typography, Button, CircularProgress, Alert, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  IconButton, AppBar, Toolbar, Snackbar
-} from '@mui/material';
-import { UploadFile as UploadFileIcon, Download as DownloadIcon, Logout as LogoutIcon } from '@mui/icons-material';
-import { format } from 'date-fns';
-import { filesize } from 'filesize';
-import api from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
-import type { UploadedFile } from '../types';
+  Container,
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  AppBar,
+  Toolbar,
+  Snackbar,
+  Tooltip,
+} from "@mui/material";
+import {
+  UploadFile as UploadFileIcon,
+  Download as DownloadIcon,
+  Logout as LogoutIcon,
+  Folder as FolderIcon,
+  Share as ShareIcon,
+  Star as StarIcon,
+  MoreVert as MoreVertIcon,
+  CreateNewFolder as CreateNewFolderIcon,
+} from "@mui/icons-material";
+import { format } from "date-fns";
+import { filesize } from "filesize";
+import api from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import type { UploadedFile } from "../types";
 
 const DashboardPage: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [notification, setNotification] = useState({ open: false, message: '' });
+  const [notification, setNotification] = useState({
+    open: false,
+    message: "",
+  });
   const { logout } = useAuth();
 
   const fetchFiles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get<UploadedFile[]>('/files');
+      const response = await api.get<UploadedFile[]>("/files");
       setFiles(response.data);
     } catch (err) {
-      setError('Failed to fetch files.');
+      setError("Failed to fetch files.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -289,119 +362,219 @@ const DashboardPage: React.FC = () => {
     fetchFiles();
   }, [fetchFiles]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     setUploading(true);
-    setError('');
+    setError("");
     try {
-      await api.post('/upload', formData, {
+      await api.post("/upload", formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          "Content-Type": "multipart/form-data",
         },
       });
-      setNotification({ open: true, message: 'File uploaded successfully!' });
+      setNotification({ open: true, message: "File uploaded successfully!" });
       fetchFiles(); // Refresh the file list
     } catch (err) {
-      setError('File upload failed.');
+      setError("File upload failed.");
       console.error(err);
     } finally {
       setUploading(false);
       // Reset file input value to allow uploading the same file again
-      event.target.value = '';
+      event.target.value = "";
     }
   };
 
   const handleFileDownload = async (fileId: string, fileName: string) => {
     try {
-      const response = await api.get(`/${fileId}/download`, {
-        responseType: 'blob',
+      const response = await api.get(`/files/${fileId}/download`, {
+        responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.setAttribute('download', fileName);
+      link.setAttribute("download", fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('File download failed.');
+      setError("File download failed.");
       console.error(err);
     }
   };
 
   return (
     <>
-      <AppBar position="static">
+      <AppBar position="static" elevation={0}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             My Cloud Storage
           </Typography>
-          <IconButton color="inherit" onClick={logout}>
-            <LogoutIcon />
-          </IconButton>
+          <Tooltip title="Logout">
+            <IconButton color="inherit" onClick={logout}>
+              <LogoutIcon />
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 4,
+          }}
+        >
           <Typography variant="h4" component="h1">
             Your Files
           </Typography>
-          <Button
-            variant="contained"
-            component="label"
-            startIcon={<UploadFileIcon />}
-            disabled={uploading}
-          >
-            {uploading ? 'Uploading...' : 'Upload File'}
-            <input type="file" hidden onChange={handleFileUpload} />
-          </Button>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<CreateNewFolderIcon />}
+              onClick={() =>
+                setNotification({
+                  open: true,
+                  message: "Create folder feature coming soon!",
+                })
+              }
+            >
+              New Folder
+            </Button>
+            <Button
+              variant="contained"
+              component="label"
+              startIcon={<UploadFileIcon />}
+              disabled={uploading}
+            >
+              {uploading ? "Uploading..." : "Upload File"}
+              <input type="file" hidden onChange={handleFileUpload} />
+            </Button>
+          </Box>
         </Box>
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
             <CircularProgress />
           </Box>
         ) : (
-          <TableContainer component={Paper}>
-            <Table sx={{ minWidth: 650 }} aria-label="simple table">
+          <TableContainer
+            component={Paper}
+            sx={{ maxHeight: "calc(100vh - 250px)", overflow: "auto" }}
+          >
+            <Table stickyHeader sx={{ minWidth: 650 }} aria-label="files table">
               <TableHead>
                 <TableRow>
                   <TableCell>File Name</TableCell>
+                  <TableCell>Location</TableCell>
+                  <TableCell>Owner</TableCell>
                   <TableCell align="right">Size</TableCell>
                   <TableCell align="right">Upload Date</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {files.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      <Typography variant="subtitle1" sx={{ p: 3 }}>No files found. Upload your first file!</Typography>
+                    <TableCell colSpan={6} align="center">
+                      <Typography variant="subtitle1" sx={{ p: 3 }}>
+                        No files found. Upload your first file!
+                      </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
                   files.map((file) => (
-                    <TableRow key={file.id}>
+                    <TableRow
+                      key={file.id}
+                      sx={{ "&:hover": { backgroundColor: "action.hover" } }}
+                    >
                       <TableCell component="th" scope="row">
                         {file.originalFileName}
                       </TableCell>
-                      <TableCell align="right">{filesize(file.size)}</TableCell>
-                      <TableCell align="right">{format(new Date(file.uploadedAt), 'Pp')}</TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleFileDownload(file.id, file.originalFileName)}
+                      <TableCell>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
                         >
-                          <DownloadIcon />
-                        </IconButton>
+                          <FolderIcon fontSize="small" color="action" />
+                          {file.location || "Root Directory"}
+                        </Box>
+                      </TableCell>
+                      <TableCell>{file.owner || "Me"}</TableCell>
+                      <TableCell align="right">{filesize(file.size)}</TableCell>
+                      <TableCell align="right">
+                        {format(new Date(file.uploadedAt), "Pp")}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "center",
+                            gap: 0.5,
+                            "& .MuiIconButton-root": {
+                              padding: 1,
+                            },
+                          }}
+                        >
+                          <Tooltip title="Add to Favorites (Coming Soon)" arrow>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="default"
+                                onClick={() =>
+                                  setNotification({
+                                    open: true,
+                                    message: "Favorites feature coming soon!",
+                                  })
+                                }
+                                disabled
+                              >
+                                <StarIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Share" arrow>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() =>
+                                setNotification({
+                                  open: true,
+                                  message: "Sharing feature coming soon!",
+                                })
+                              }
+                            >
+                              <ShareIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Download" arrow>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() =>
+                                handleFileDownload(
+                                  file.id,
+                                  file.originalFileName
+                                )
+                              }
+                            >
+                              <DownloadIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))
@@ -428,34 +601,45 @@ export default DashboardPage;
 DOSYA: .\src\pages\LoginPage.tsx
 ===============================================
 
-import React, { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import React, { useState } from "react";
+import { useNavigate, Link as RouterLink } from "react-router-dom";
 import {
-  Container, Box, Typography, TextField, Button, CircularProgress, Alert, Link,
-} from '@mui/material';
-import api from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
-import type { AuthResponse } from '../types';
+  Container,
+  Box,
+  Typography,
+  TextField,
+  Button,
+  CircularProgress,
+  Alert,
+  Link,
+} from "@mui/material";
+import { Storage as StorageIcon } from "@mui/icons-material";
+import api from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import type { AuthResponse } from "../types";
 
 const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const navigate = useNavigate();
   const auth = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
     try {
-      const response = await api.post<AuthResponse>('/login', { username, password });
+      const response = await api.post<AuthResponse>("/login", {
+        username,
+        password,
+      });
       auth.login(response.data.token);
-      navigate('/');
+      navigate("/");
     } catch (err) {
-      setError('Invalid username or password. Please try again.');
-      console.error('Login failed:', err);
+      setError("Invalid username or password. Please try again.");
+      console.error("Login failed:", err);
     } finally {
       setLoading(false);
     }
@@ -465,57 +649,129 @@ const LoginPage: React.FC = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
+          marginTop: { xs: 4, sm: 8 },
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
         }}
       >
-        <Typography component="h1" variant="h4" gutterBottom>
-          Cloud Storage
-        </Typography>
-        <Typography component="h2" variant="h5">
-          Sign In
-        </Typography>
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-          {error && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{error}</Alert>}
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            id="username"
-            label="Username"
-            name="username"
-            autoComplete="username"
-            autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="password"
-            label="Password"
-            type="password"
-            id="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2, py: 1.5 }}
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign In'}
-          </Button>
-          <Link component={RouterLink} to="/register" variant="body2">
-            {"Don't have an account? Sign Up"}
-          </Link>
+        <Box
+          sx={{
+            bgcolor: "background.paper",
+            p: 4,
+            borderRadius: 2,
+            boxShadow: (theme) => `0 0 24px ${theme.palette.primary.dark}22`,
+            width: "100%",
+          }}
+        >
+          <Box sx={{ mb: 4, textAlign: "center" }}>
+            <StorageIcon sx={{ fontSize: 40, color: "primary.main", mb: 2 }} />
+            <Typography
+              component="h1"
+              variant="h4"
+              gutterBottom
+              fontWeight="bold"
+            >
+              Cloud Storage
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Welcome back! Please sign in to continue.
+            </Typography>
+          </Box>
+
+          <Box component="form" onSubmit={handleSubmit}>
+            {error && (
+              <Alert
+                severity="error"
+                sx={{
+                  width: "100%",
+                  mb: 2,
+                  borderRadius: 2,
+                }}
+              >
+                {error}
+              </Alert>
+            )}
+
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              id="username"
+              label="Username"
+              name="username"
+              autoComplete="username"
+              autoFocus
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                },
+              }}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="password"
+              label="Password"
+              type="password"
+              id="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                },
+              }}
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{
+                mt: 3,
+                mb: 2,
+                py: 1.5,
+                borderRadius: 2,
+              }}
+              disabled={loading}
+            >
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                "Sign In"
+              )}
+            </Button>
+
+            <Box sx={{ textAlign: "center" }}>
+              <Link
+                component={RouterLink}
+                to="/register"
+                variant="body2"
+                sx={{
+                  textDecoration: "none",
+                  "&:hover": {
+                    textDecoration: "underline",
+                  },
+                }}
+              >
+                Don't have an account? Sign Up
+              </Link>
+            </Box>
+          </Box>
         </Box>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 4, textAlign: "center" }}
+        >
+          🔒 Enterprise-grade security • Automatic backup • Unlimited storage
+        </Typography>
       </Box>
     </Container>
   );
@@ -5187,7 +5443,7 @@ DOSYA: .\all_code.txt
 
 ===============================================
 PROJE KOD DOSYALARI
-OluÅŸturulma Tarihi: 07/23/2025 14:19:42
+OluÅŸturulma Tarihi: 08/16/2025 23:58:33
 Proje Yolu: C:\Java\my-cloud-storage-frontend
 ===============================================
 
@@ -5238,24 +5494,68 @@ export default defineConfig({
 DOSYA: .\src\theme.ts
 ===============================================
 
-import { createTheme } from '@mui/material/styles';
+import { createTheme } from "@mui/material/styles";
 
 export const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: "dark",
     primary: {
-      main: '#7e57c2', // A nice purple
+      main: "#6366f1", // Modern indigo
+      light: "#818cf8",
+      dark: "#4f46e5",
     },
     secondary: {
-      main: '#03a9f4', // A light blue
+      main: "#14b8a6", // Modern teal
+      light: "#2dd4bf",
+      dark: "#0d9488",
     },
     background: {
-      default: '#121212',
-      paper: '#1e1e1e',
+      default: "#0f172a", // Dark blue-gray
+      paper: "#1e293b",
+    },
+    error: {
+      main: "#ef4444",
+    },
+    success: {
+      main: "#22c55e",
     },
   },
   typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    h1: {
+      fontWeight: 700,
+    },
+    h2: {
+      fontWeight: 600,
+    },
+    h3: {
+      fontWeight: 600,
+    },
+    h4: {
+      fontWeight: 600,
+    },
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: "none",
+          fontWeight: 600,
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          backgroundImage: "none",
+        },
+      },
+    },
   },
 });
 
@@ -5307,6 +5607,8 @@ export interface UploadedFile {
   originalFileName: string;
   size: number;
   uploadedAt: string; // ISO string format
+  owner: string;
+  location: string;
 }
 
 
@@ -5438,34 +5740,61 @@ export const useAuth = () => {
 DOSYA: .\src\pages\DashboardPage.tsx
 ===============================================
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Container, Box, Typography, Button, CircularProgress, Alert, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  IconButton, AppBar, Toolbar, Snackbar
-} from '@mui/material';
-import { UploadFile as UploadFileIcon, Download as DownloadIcon, Logout as LogoutIcon } from '@mui/icons-material';
-import { format } from 'date-fns';
-import { filesize } from 'filesize';
-import api from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
-import type { UploadedFile } from '../types';
+  Container,
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  AppBar,
+  Toolbar,
+  Snackbar,
+  Tooltip,
+} from "@mui/material";
+import {
+  UploadFile as UploadFileIcon,
+  Download as DownloadIcon,
+  Logout as LogoutIcon,
+  Folder as FolderIcon,
+  Share as ShareIcon,
+  Star as StarIcon,
+  MoreVert as MoreVertIcon,
+  CreateNewFolder as CreateNewFolderIcon,
+} from "@mui/icons-material";
+import { format } from "date-fns";
+import { filesize } from "filesize";
+import api from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import type { UploadedFile } from "../types";
 
 const DashboardPage: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [notification, setNotification] = useState({ open: false, message: '' });
+  const [notification, setNotification] = useState({
+    open: false,
+    message: "",
+  });
   const { logout } = useAuth();
 
   const fetchFiles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get<UploadedFile[]>('/files');
+      const response = await api.get<UploadedFile[]>("/files");
       setFiles(response.data);
     } catch (err) {
-      setError('Failed to fetch files.');
+      setError("Failed to fetch files.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -5476,119 +5805,219 @@ const DashboardPage: React.FC = () => {
     fetchFiles();
   }, [fetchFiles]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     setUploading(true);
-    setError('');
+    setError("");
     try {
-      await api.post('/upload', formData, {
+      await api.post("/upload", formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          "Content-Type": "multipart/form-data",
         },
       });
-      setNotification({ open: true, message: 'File uploaded successfully!' });
+      setNotification({ open: true, message: "File uploaded successfully!" });
       fetchFiles(); // Refresh the file list
     } catch (err) {
-      setError('File upload failed.');
+      setError("File upload failed.");
       console.error(err);
     } finally {
       setUploading(false);
       // Reset file input value to allow uploading the same file again
-      event.target.value = '';
+      event.target.value = "";
     }
   };
 
   const handleFileDownload = async (fileId: string, fileName: string) => {
     try {
-      const response = await api.get(`/${fileId}/download`, {
-        responseType: 'blob',
+      const response = await api.get(`/files/${fileId}/download`, {
+        responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.setAttribute('download', fileName);
+      link.setAttribute("download", fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('File download failed.');
+      setError("File download failed.");
       console.error(err);
     }
   };
 
   return (
     <>
-      <AppBar position="static">
+      <AppBar position="static" elevation={0}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             My Cloud Storage
           </Typography>
-          <IconButton color="inherit" onClick={logout}>
-            <LogoutIcon />
-          </IconButton>
+          <Tooltip title="Logout">
+            <IconButton color="inherit" onClick={logout}>
+              <LogoutIcon />
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 4,
+          }}
+        >
           <Typography variant="h4" component="h1">
             Your Files
           </Typography>
-          <Button
-            variant="contained"
-            component="label"
-            startIcon={<UploadFileIcon />}
-            disabled={uploading}
-          >
-            {uploading ? 'Uploading...' : 'Upload File'}
-            <input type="file" hidden onChange={handleFileUpload} />
-          </Button>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<CreateNewFolderIcon />}
+              onClick={() =>
+                setNotification({
+                  open: true,
+                  message: "Create folder feature coming soon!",
+                })
+              }
+            >
+              New Folder
+            </Button>
+            <Button
+              variant="contained"
+              component="label"
+              startIcon={<UploadFileIcon />}
+              disabled={uploading}
+            >
+              {uploading ? "Uploading..." : "Upload File"}
+              <input type="file" hidden onChange={handleFileUpload} />
+            </Button>
+          </Box>
         </Box>
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
             <CircularProgress />
           </Box>
         ) : (
-          <TableContainer component={Paper}>
-            <Table sx={{ minWidth: 650 }} aria-label="simple table">
+          <TableContainer
+            component={Paper}
+            sx={{ maxHeight: "calc(100vh - 250px)", overflow: "auto" }}
+          >
+            <Table stickyHeader sx={{ minWidth: 650 }} aria-label="files table">
               <TableHead>
                 <TableRow>
                   <TableCell>File Name</TableCell>
+                  <TableCell>Location</TableCell>
+                  <TableCell>Owner</TableCell>
                   <TableCell align="right">Size</TableCell>
                   <TableCell align="right">Upload Date</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {files.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      <Typography variant="subtitle1" sx={{ p: 3 }}>No files found. Upload your first file!</Typography>
+                    <TableCell colSpan={6} align="center">
+                      <Typography variant="subtitle1" sx={{ p: 3 }}>
+                        No files found. Upload your first file!
+                      </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
                   files.map((file) => (
-                    <TableRow key={file.id}>
+                    <TableRow
+                      key={file.id}
+                      sx={{ "&:hover": { backgroundColor: "action.hover" } }}
+                    >
                       <TableCell component="th" scope="row">
                         {file.originalFileName}
                       </TableCell>
-                      <TableCell align="right">{filesize(file.size)}</TableCell>
-                      <TableCell align="right">{format(new Date(file.uploadedAt), 'Pp')}</TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleFileDownload(file.id, file.originalFileName)}
+                      <TableCell>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
                         >
-                          <DownloadIcon />
-                        </IconButton>
+                          <FolderIcon fontSize="small" color="action" />
+                          {file.location || "Root Directory"}
+                        </Box>
+                      </TableCell>
+                      <TableCell>{file.owner || "Me"}</TableCell>
+                      <TableCell align="right">{filesize(file.size)}</TableCell>
+                      <TableCell align="right">
+                        {format(new Date(file.uploadedAt), "Pp")}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "center",
+                            gap: 0.5,
+                            "& .MuiIconButton-root": {
+                              padding: 1,
+                            },
+                          }}
+                        >
+                          <Tooltip title="Add to Favorites (Coming Soon)" arrow>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="default"
+                                onClick={() =>
+                                  setNotification({
+                                    open: true,
+                                    message: "Favorites feature coming soon!",
+                                  })
+                                }
+                                disabled
+                              >
+                                <StarIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Share" arrow>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() =>
+                                setNotification({
+                                  open: true,
+                                  message: "Sharing feature coming soon!",
+                                })
+                              }
+                            >
+                              <ShareIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Download" arrow>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() =>
+                                handleFileDownload(
+                                  file.id,
+                                  file.originalFileName
+                                )
+                              }
+                            >
+                              <DownloadIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))
@@ -5615,34 +6044,45 @@ export default DashboardPage;
 DOSYA: .\src\pages\LoginPage.tsx
 ===============================================
 
-import React, { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import React, { useState } from "react";
+import { useNavigate, Link as RouterLink } from "react-router-dom";
 import {
-  Container, Box, Typography, TextField, Button, CircularProgress, Alert, Link,
-} from '@mui/material';
-import api from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
-import type { AuthResponse } from '../types';
+  Container,
+  Box,
+  Typography,
+  TextField,
+  Button,
+  CircularProgress,
+  Alert,
+  Link,
+} from "@mui/material";
+import { Storage as StorageIcon } from "@mui/icons-material";
+import api from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import type { AuthResponse } from "../types";
 
 const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const navigate = useNavigate();
   const auth = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
     try {
-      const response = await api.post<AuthResponse>('/login', { username, password });
+      const response = await api.post<AuthResponse>("/login", {
+        username,
+        password,
+      });
       auth.login(response.data.token);
-      navigate('/');
+      navigate("/");
     } catch (err) {
-      setError('Invalid username or password. Please try again.');
-      console.error('Login failed:', err);
+      setError("Invalid username or password. Please try again.");
+      console.error("Login failed:", err);
     } finally {
       setLoading(false);
     }
@@ -5652,57 +6092,129 @@ const LoginPage: React.FC = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
+          marginTop: { xs: 4, sm: 8 },
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
         }}
       >
-        <Typography component="h1" variant="h4" gutterBottom>
-          Cloud Storage
-        </Typography>
-        <Typography component="h2" variant="h5">
-          Sign In
-        </Typography>
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-          {error && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{error}</Alert>}
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            id="username"
-            label="Username"
-            name="username"
-            autoComplete="username"
-            autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="password"
-            label="Password"
-            type="password"
-            id="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2, py: 1.5 }}
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign In'}
-          </Button>
-          <Link component={RouterLink} to="/register" variant="body2">
-            {"Don't have an account? Sign Up"}
-          </Link>
+        <Box
+          sx={{
+            bgcolor: "background.paper",
+            p: 4,
+            borderRadius: 2,
+            boxShadow: (theme) => `0 0 24px ${theme.palette.primary.dark}22`,
+            width: "100%",
+          }}
+        >
+          <Box sx={{ mb: 4, textAlign: "center" }}>
+            <StorageIcon sx={{ fontSize: 40, color: "primary.main", mb: 2 }} />
+            <Typography
+              component="h1"
+              variant="h4"
+              gutterBottom
+              fontWeight="bold"
+            >
+              Cloud Storage
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Welcome back! Please sign in to continue.
+            </Typography>
+          </Box>
+
+          <Box component="form" onSubmit={handleSubmit}>
+            {error && (
+              <Alert
+                severity="error"
+                sx={{
+                  width: "100%",
+                  mb: 2,
+                  borderRadius: 2,
+                }}
+              >
+                {error}
+              </Alert>
+            )}
+
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              id="username"
+              label="Username"
+              name="username"
+              autoComplete="username"
+              autoFocus
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                },
+              }}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="password"
+              label="Password"
+              type="password"
+              id="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                },
+              }}
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{
+                mt: 3,
+                mb: 2,
+                py: 1.5,
+                borderRadius: 2,
+              }}
+              disabled={loading}
+            >
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                "Sign In"
+              )}
+            </Button>
+
+            <Box sx={{ textAlign: "center" }}>
+              <Link
+                component={RouterLink}
+                to="/register"
+                variant="body2"
+                sx={{
+                  textDecoration: "none",
+                  "&:hover": {
+                    textDecoration: "underline",
+                  },
+                }}
+              >
+                Don't have an account? Sign Up
+              </Link>
+            </Box>
+          </Box>
         </Box>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 4, textAlign: "center" }}
+        >
+          🔒 Enterprise-grade security • Automatic backup • Unlimited storage
+        </Typography>
       </Box>
     </Container>
   );
