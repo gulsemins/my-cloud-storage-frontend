@@ -26,6 +26,9 @@ import {
   DialogActions,
   TextField,
   DialogContentText,
+  Breadcrumbs,
+  Link,
+  Chip,
 } from "@mui/material";
 import {
   UploadFile as UploadFileIcon,
@@ -33,14 +36,56 @@ import {
   Logout as LogoutIcon,
   Folder as FolderIcon,
   Share as ShareIcon,
+  CreateNewFolder as CreateNewFolderIcon,
+  ArrowBack as ArrowBackIcon,
+  FolderOpen as FolderOpenIcon,
+  InsertDriveFile as FileIcon,
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import { filesize } from "filesize";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
-import type { UploadedFile, SharedFile } from "../types";
 
-// Paylaşım diyalogu için props tipi
+// Type definitions
+interface UploadedFile {
+  id: string;
+  originalFileName: string;
+  storedFileName: string;
+  size: number;
+  uploadedAt: string;
+  createdAt: string;
+  folderId: string | null; // Updated to match your DTO
+}
+
+interface SharedFile {
+  id: string;
+  file: UploadedFile;
+  sharedBy: {
+    id: string;
+    username: string;
+    email: string;
+  };
+  sharedWith: {
+    id: string;
+    username: string;
+    email: string;
+  };
+  createdAt: string;
+}
+
+interface Folder {
+  id: string;
+  name: string;
+  user: {
+    id: string;
+    username: string;
+    email: string;
+  };
+  createdAt: string;
+  parentFolderId: string | null;
+}
+
+// Share Dialog Component
 interface ShareDialogProps {
   open: boolean;
   onClose: () => void;
@@ -98,9 +143,77 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   );
 };
 
+// Create Folder Dialog Component
+interface CreateFolderDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (name: string, parentFolderId?: string) => Promise<void>;
+  loading: boolean;
+  error: string | null;
+  currentFolderId?: string;
+}
+
+const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
+  open,
+  onClose,
+  onCreate,
+  loading,
+  error,
+  currentFolderId,
+}) => {
+  const [folderName, setFolderName] = useState("");
+
+  const handleCreate = () => {
+    if (folderName.trim()) {
+      onCreate(folderName.trim(), currentFolderId);
+    }
+  };
+
+  const handleClose = () => {
+    setFolderName("");
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
+      <DialogTitle>Create New Folder</DialogTitle>
+      <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        <TextField
+          autoFocus
+          margin="dense"
+          id="folderName"
+          label="Folder Name"
+          type="text"
+          fullWidth
+          variant="outlined"
+          value={folderName}
+          onChange={(e) => setFolderName(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === "Enter" && folderName.trim()) {
+              handleCreate();
+            }
+          }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClose}>Cancel</Button>
+        <Button onClick={handleCreate} disabled={loading || !folderName.trim()}>
+          {loading ? <CircularProgress size={24} /> : "Create"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const DashboardPage: React.FC = () => {
   const [myFiles, setMyFiles] = useState<UploadedFile[]>([]);
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -110,11 +223,24 @@ const DashboardPage: React.FC = () => {
   });
   const [activeTab, setActiveTab] = useState(0);
 
-  // Paylaşım diyalogu state'leri
+  // Navigation state
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [folderHistory, setFolderHistory] = useState<
+    Array<{ id: string | null; name: string }>
+  >([{ id: null, name: "Home" }]);
+
+  // Share dialog state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+
+  // Create folder dialog state
+  const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
+  const [createFolderLoading, setCreateFolderLoading] = useState(false);
+  const [createFolderError, setCreateFolderError] = useState<string | null>(
+    null
+  );
 
   const { logout } = useAuth();
 
@@ -122,14 +248,44 @@ const DashboardPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await api.get<UploadedFile[]>("/files");
+      console.log("Raw files from backend:", response.data);
+
+      // Debug: Check each file's folder association
+      response.data.forEach((file) => {
+        console.log(
+          `File: ${file.originalFileName}, FolderId: ${file.folderId}`
+        );
+      });
+
       setMyFiles(response.data);
     } catch (err) {
       setError("Failed to fetch your files.");
-      console.error(err);
+      console.error("Files fetch error:", err);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const fetchFolders = useCallback(async () => {
+    try {
+      setLoading(true);
+      let response;
+      if (currentFolderId) {
+        // Fetch subfolders of current folder
+        response = await api.get<Folder[]>(`/subFolders/${currentFolderId}`);
+      } else {
+        // Fetch root level folders (folders with no parent)
+        response = await api.get<Folder[]>("/folders");
+      }
+      setFolders(response.data);
+      console.log("Fetched folders:", response.data); // Debug log
+    } catch (err) {
+      setError("Failed to fetch folders.");
+      console.error("Folder fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentFolderId]);
 
   const fetchSharedFiles = useCallback(async () => {
     try {
@@ -146,11 +302,17 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === 0) {
-      fetchMyFiles();
+      Promise.all([fetchMyFiles(), fetchFolders()]);
     } else {
       fetchSharedFiles();
     }
-  }, [activeTab, fetchMyFiles, fetchSharedFiles]);
+  }, [
+    activeTab,
+    currentFolderId,
+    fetchMyFiles,
+    fetchFolders,
+    fetchSharedFiles,
+  ]);
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -161,17 +323,43 @@ const DashboardPage: React.FC = () => {
     const formData = new FormData();
     formData.append("file", file);
 
+    // Debug: Log what we're sending
+    console.log("Current folder ID:", currentFolderId);
+    console.log("Folder history:", folderHistory);
+
+    if (currentFolderId) {
+      formData.append("folderId", currentFolderId);
+      console.log("Adding folderId to form data:", currentFolderId);
+    } else {
+      console.log("No folder ID - uploading to root");
+    }
+
+    // Debug: Check FormData contents
+    for (let pair of formData.entries()) {
+      console.log("FormData:", pair[0], pair[1]);
+    }
+
     setUploading(true);
     setError("");
     try {
-      await api.post("/upload", formData, {
+      const response = await api.post("/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      console.log("Upload response:", response.data);
+
       setNotification({ open: true, message: "File uploaded successfully!" });
-      fetchMyFiles(); // Refresh the file list
-    } catch (err) {
-      setError("File upload failed.");
-      console.error(err);
+
+      // Wait a moment then refresh to ensure backend processing is complete
+      setTimeout(async () => {
+        await fetchMyFiles();
+        await fetchFolders();
+      }, 500);
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || err.message || "Unknown error";
+      setError("File upload failed: " + errorMessage);
+      console.error("Upload error:", err);
+      console.error("Error response:", err.response?.data);
     } finally {
       setUploading(false);
       event.target.value = "";
@@ -180,10 +368,6 @@ const DashboardPage: React.FC = () => {
 
   const handleFileDownload = async (fileId: string, fileName: string) => {
     try {
-      // Backend'deki download endpoint'i dosya sahibini kontrol ediyor.
-      // Paylaşılan dosyalarda bu kısım backend'de düzenlenmeli.
-      // Şimdilik, sadece /files/{fileId}/download'a istek atıyoruz.
-      // Backend'de bu endpoint'in paylaşılan dosyalar için de yetkilendirme yapması gerekir.
       const response = await api.get(`/${fileId}/download`, {
         responseType: "blob",
       });
@@ -198,6 +382,51 @@ const DashboardPage: React.FC = () => {
     } catch (err) {
       setError("File download failed. You may not have permission.");
       console.error(err);
+    }
+  };
+
+  const handleCreateFolder = async (name: string, parentFolderId?: string) => {
+    setCreateFolderLoading(true);
+    setCreateFolderError(null);
+    try {
+      await api.post("/createFolders", {
+        name,
+        parentFolderId: parentFolderId || null,
+      });
+      setNotification({
+        open: true,
+        message: "Folder created successfully!",
+      });
+      setCreateFolderDialogOpen(false);
+      fetchFolders();
+    } catch (err: any) {
+      setCreateFolderError(
+        err.response?.data?.message || "Failed to create folder."
+      );
+      console.error(err);
+    } finally {
+      setCreateFolderLoading(false);
+    }
+  };
+
+  const handleFolderDoubleClick = (folder: Folder) => {
+    setCurrentFolderId(folder.id);
+    setFolderHistory([...folderHistory, { id: folder.id, name: folder.name }]);
+  };
+
+  const handleBreadcrumbClick = (index: number) => {
+    const newHistory = folderHistory.slice(0, index + 1);
+    const targetFolder = newHistory[newHistory.length - 1];
+    setCurrentFolderId(targetFolder.id);
+    setFolderHistory(newHistory);
+  };
+
+  const handleBackClick = () => {
+    if (folderHistory.length > 1) {
+      const newHistory = folderHistory.slice(0, -1);
+      const parentFolder = newHistory[newHistory.length - 1];
+      setCurrentFolderId(parentFolder.id);
+      setFolderHistory(newHistory);
     }
   };
 
@@ -237,6 +466,21 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  // Filter files that belong to current folder
+  const currentFolderFiles = myFiles.filter((file) => {
+    if (currentFolderId) {
+      // When in a specific folder, show only files that belong to this folder
+      return file.folderId === currentFolderId;
+    } else {
+      // When in root, show only files that have no folderId or folderId is null
+      return !file.folderId || file.folderId === null;
+    }
+  });
+
+  console.log("Current folder ID:", currentFolderId);
+  console.log("All files:", myFiles);
+  console.log("Current folder files:", currentFolderFiles);
+
   return (
     <>
       <AppBar position="static" elevation={0}>
@@ -263,15 +507,28 @@ const DashboardPage: React.FC = () => {
           <Typography variant="h4" component="h1">
             Dashboard
           </Typography>
-          <Button
-            variant="contained"
-            component="label"
-            startIcon={<UploadFileIcon />}
-            disabled={uploading}
-          >
-            {uploading ? "Uploading..." : "Upload File"}
-            <input type="file" hidden onChange={handleFileUpload} />
-          </Button>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            {activeTab === 0 && (
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={<CreateNewFolderIcon />}
+                  onClick={() => setCreateFolderDialogOpen(true)}
+                >
+                  New Folder
+                </Button>
+                <Button
+                  variant="contained"
+                  component="label"
+                  startIcon={<UploadFileIcon />}
+                  disabled={uploading}
+                >
+                  {uploading ? "Uploading..." : "Upload File"}
+                  <input type="file" hidden onChange={handleFileUpload} />
+                </Button>
+              </>
+            )}
+          </Box>
         </Box>
 
         <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 4 }}>
@@ -284,6 +541,42 @@ const DashboardPage: React.FC = () => {
             <Tab label="Shared With Me" />
           </Tabs>
         </Box>
+
+        {activeTab === 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+              {folderHistory.length > 1 && (
+                <IconButton onClick={handleBackClick} sx={{ mr: 1 }}>
+                  <ArrowBackIcon />
+                </IconButton>
+              )}
+              <Breadcrumbs aria-label="breadcrumb" sx={{ flexGrow: 1 }}>
+                {folderHistory.map((folder, index) => (
+                  <Link
+                    key={folder.id || "root"}
+                    color="inherit"
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleBreadcrumbClick(index);
+                    }}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      textDecoration: "none",
+                      "&:hover": {
+                        textDecoration: "underline",
+                      },
+                    }}
+                  >
+                    <FolderIcon sx={{ mr: 0.5 }} fontSize="inherit" />
+                    {folder.name}
+                  </Link>
+                ))}
+              </Breadcrumbs>
+            </Box>
+          </Box>
+        )}
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -298,65 +591,152 @@ const DashboardPage: React.FC = () => {
         ) : (
           <TableContainer
             component={Paper}
-            sx={{ maxHeight: "calc(100vh - 250px)", overflow: "auto" }}
+            sx={{ maxHeight: "calc(100vh - 350px)", overflow: "auto" }}
           >
             {activeTab === 0 ? (
-              // My Files Table
+              // My Files and Folders Table
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell>File Name</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Type</TableCell>
                     <TableCell align="right">Size</TableCell>
-                    <TableCell align="right">Upload Date</TableCell>
+                    <TableCell align="right">Date Created</TableCell>
                     <TableCell align="center">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {myFiles.length === 0 ? (
+                  {folders.length === 0 && currentFolderFiles.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} align="center">
+                      <TableCell colSpan={5} align="center">
                         <Typography variant="subtitle1" sx={{ p: 3 }}>
-                          No files found. Upload your first file!
+                          {currentFolderId
+                            ? "This folder is empty. Upload files or create subfolders!"
+                            : "No files or folders found. Upload your first file or create a folder!"}
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    myFiles.map((file) => (
-                      <TableRow key={file.id} hover>
-                        <TableCell component="th" scope="row">
-                          {file.originalFileName}
-                        </TableCell>
-                        <TableCell align="right">
-                          {filesize(file.size)}
-                        </TableCell>
-                        <TableCell align="right">
-                          {format(new Date(file.uploadedAt), "Pp")}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Tooltip title="Share">
-                            <IconButton
-                              color="primary"
-                              onClick={() => handleOpenShareDialog(file)}
+                    <>
+                      {/* Render folders first */}
+                      {folders.map((folder) => (
+                        <TableRow
+                          key={folder.id}
+                          hover
+                          onClick={() => handleFolderDoubleClick(folder)}
+                          sx={{
+                            cursor: "pointer",
+                            "&:hover": {
+                              backgroundColor: "action.hover",
+                              "& .folder-name": {
+                                color: "primary.main",
+                              },
+                            },
+                          }}
+                        >
+                          <TableCell component="th" scope="row">
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                "&:hover": {
+                                  color: "primary.main",
+                                },
+                              }}
                             >
-                              <ShareIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Download">
-                            <IconButton
+                              <FolderIcon
+                                sx={{ mr: 1, color: "primary.main" }}
+                              />
+                              <Typography
+                                className="folder-name"
+                                variant="body1"
+                                sx={{
+                                  transition: "color 0.2s",
+                                }}
+                              >
+                                {folder.name}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label="Folder"
+                              size="small"
                               color="primary"
-                              onClick={() =>
-                                handleFileDownload(
-                                  file.id,
-                                  file.originalFileName
-                                )
-                              }
-                            >
-                              <DownloadIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell align="right">—</TableCell>
+                          <TableCell align="right">
+                            {format(new Date(folder.createdAt), "Pp")}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Open Folder">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent double navigation
+                                  handleFolderDoubleClick(folder);
+                                }}
+                              >
+                                <FolderOpenIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+
+                      {/* Then render files */}
+                      {currentFolderFiles.map((file) => (
+                        <TableRow key={file.id} hover>
+                          <TableCell component="th" scope="row">
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                              <FileIcon
+                                sx={{ mr: 1, color: "text.secondary" }}
+                              />
+                              {file.originalFileName}
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label="File"
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {filesize(file.size)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {format(new Date(file.uploadedAt), "Pp")}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Share">
+                              <IconButton
+                                color="primary"
+                                onClick={() => handleOpenShareDialog(file)}
+                              >
+                                <ShareIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Download">
+                              <IconButton
+                                color="primary"
+                                onClick={() =>
+                                  handleFileDownload(
+                                    file.id,
+                                    file.originalFileName
+                                  )
+                                }
+                              >
+                                <DownloadIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </>
                   )}
                 </TableBody>
               </Table>
@@ -385,7 +765,10 @@ const DashboardPage: React.FC = () => {
                     sharedFiles.map((sharedFile) => (
                       <TableRow key={sharedFile.id} hover>
                         <TableCell component="th" scope="row">
-                          {sharedFile.file.originalFileName}
+                          <Box sx={{ display: "flex", alignItems: "center" }}>
+                            <FileIcon sx={{ mr: 1, color: "text.secondary" }} />
+                            {sharedFile.file.originalFileName}
+                          </Box>
                         </TableCell>
                         <TableCell>{sharedFile.sharedBy.username}</TableCell>
                         <TableCell align="right">
@@ -419,6 +802,7 @@ const DashboardPage: React.FC = () => {
         )}
       </Container>
 
+      {/* Share Dialog */}
       {selectedFile && (
         <ShareDialog
           open={shareDialogOpen}
@@ -430,6 +814,17 @@ const DashboardPage: React.FC = () => {
         />
       )}
 
+      {/* Create Folder Dialog */}
+      <CreateFolderDialog
+        open={createFolderDialogOpen}
+        onClose={() => setCreateFolderDialogOpen(false)}
+        onCreate={handleCreateFolder}
+        loading={createFolderLoading}
+        error={createFolderError}
+        currentFolderId={currentFolderId || undefined}
+      />
+
+      {/* Notification Snackbar */}
       <Snackbar
         open={notification.open}
         autoHideDuration={4000}
