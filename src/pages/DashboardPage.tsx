@@ -29,6 +29,7 @@ import {
   Breadcrumbs,
   Link,
   Chip,
+  InputAdornment,
 } from "@mui/material";
 import {
   UploadFile as UploadFileIcon,
@@ -40,6 +41,11 @@ import {
   ArrowBack as ArrowBackIcon,
   FolderOpen as FolderOpenIcon,
   InsertDriveFile as FileIcon,
+} from "@mui/icons-material";
+import {
+  ContentCopy as CopyIcon,
+  Link as LinkIcon,
+  Person as PersonIcon,
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import { filesize } from "filesize";
@@ -90,59 +96,210 @@ interface ShareDialogProps {
   open: boolean;
   onClose: () => void;
   onShare: (username: string) => Promise<void>;
+  onCreatePublicLink: () => Promise<string>;
   fileName: string;
   loading: boolean;
   error: string | null;
+  publicLinkLoading: boolean;
+  publicLinkError: string | null;
 }
 
 const ShareDialog: React.FC<ShareDialogProps> = ({
   open,
   onClose,
   onShare,
+  onCreatePublicLink,
   fileName,
   loading,
   error,
+  publicLinkLoading,
+  publicLinkError,
 }) => {
   const [username, setUsername] = useState("");
+  const [activeTab, setActiveTab] = useState(0);
+  const [publicLink, setPublicLink] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const handleShareClick = () => {
     onShare(username);
   };
 
+  const handleCreatePublicLink = async () => {
+    try {
+      const link = await onCreatePublicLink();
+      setPublicLink(link);
+    } catch (error) {
+      // Error is handled in the parent component
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(publicLink);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+    }
+  };
+
+  const handleClose = () => {
+    setUsername("");
+    setPublicLink("");
+    setLinkCopied(false);
+    setActiveTab(0);
+    onClose();
+  };
+
+  const TabPanel = ({
+    children,
+    value,
+    index,
+  }: {
+    children: React.ReactNode;
+    value: number;
+    index: number;
+  }) => (
+    <div hidden={value !== index} style={{ paddingTop: 16 }}>
+      {value === index && children}
+    </div>
+  );
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
       <DialogTitle>Share "{fileName}"</DialogTitle>
       <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>
-          Enter the username of the person you want to share this file with.
-        </DialogContentText>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        <TextField
-          autoFocus
-          margin="dense"
-          id="username"
-          label="Username"
-          type="text"
-          fullWidth
-          variant="outlined"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+          <Tabs
+            value={activeTab}
+            onChange={(_, newValue) => setActiveTab(newValue)}
+            aria-label="share options"
+          >
+            <Tab icon={<PersonIcon />} label="Share with User" />
+            <Tab icon={<LinkIcon />} label="Public Link" />
+          </Tabs>
+        </Box>
+
+        <TabPanel value={activeTab} index={0}>
+          <DialogContentText sx={{ mb: 2 }}>
+            Enter the username of the person you want to share this file with.
+          </DialogContentText>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          <TextField
+            autoFocus
+            margin="dense"
+            id="username"
+            label="Username"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter username..."
+          />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={1}>
+          <DialogContentText sx={{ mb: 2 }}>
+            Create a public link that anyone can use to download this file. The
+            link will expire in 24 hours.
+          </DialogContentText>
+
+          {publicLinkError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {publicLinkError}
+            </Alert>
+          )}
+
+          {!publicLink ? (
+            <Box sx={{ textAlign: "center", py: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<LinkIcon />}
+                onClick={handleCreatePublicLink}
+                disabled={publicLinkLoading}
+                size="large"
+              >
+                {publicLinkLoading ? (
+                  <>
+                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                    Creating Link...
+                  </>
+                ) : (
+                  "Create Public Link"
+                )}
+              </Button>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Anyone with this link will be able to download the file
+              </Typography>
+            </Box>
+          ) : (
+            <Paper sx={{ p: 2, bgcolor: "background.paper" }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Public Link Created
+              </Typography>
+              <TextField
+                fullWidth
+                value={publicLink}
+                variant="outlined"
+                size="small"
+                sx={{
+                  backgroundColor: "#fff",
+                  "& .MuiInputBase-root": {
+                    color: "common.black",
+                  },
+                  "& .MuiInputBase-input": {
+                    color: "common.black",
+                  },
+                }}
+                InputProps={{
+                  readOnly: true,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Tooltip title={linkCopied ? "Copied!" : "Copy link"}>
+                        <IconButton
+                          onClick={handleCopyLink}
+                          color={linkCopied ? "success" : "primary"}
+                          size="small"
+                        >
+                          <CopyIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 1 }}
+              >
+                This link will expire in 24 hours
+              </Typography>
+            </Paper>
+          )}
+        </TabPanel>
       </DialogContent>
+
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleShareClick} disabled={loading || !username}>
-          {loading ? <CircularProgress size={24} /> : "Share"}
-        </Button>
+        <Button onClick={handleClose}>Close</Button>
+        {activeTab === 0 && (
+          <Button
+            onClick={handleShareClick}
+            disabled={loading || !username.trim()}
+            variant="contained"
+          >
+            {loading ? <CircularProgress size={24} /> : "Share"}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
 };
-
 // Create Folder Dialog Component
 interface CreateFolderDialogProps {
   open: boolean;
@@ -222,7 +379,8 @@ const DashboardPage: React.FC = () => {
     message: "",
   });
   const [activeTab, setActiveTab] = useState(0);
-
+  const [publicLinkLoading, setPublicLinkLoading] = useState(false);
+  const [publicLinkError, setPublicLinkError] = useState<string | null>(null);
   // Navigation state
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [folderHistory, setFolderHistory] = useState<
@@ -436,11 +594,6 @@ const DashboardPage: React.FC = () => {
     setShareError(null);
   };
 
-  const handleCloseShareDialog = () => {
-    setShareDialogOpen(false);
-    setSelectedFile(null);
-  };
-
   const handleShareFile = async (username: string) => {
     if (!selectedFile) return;
     setShareLoading(true);
@@ -476,6 +629,39 @@ const DashboardPage: React.FC = () => {
       return !file.folderId || file.folderId === null;
     }
   });
+
+  const handleCreatePublicLink = async (): Promise<string> => {
+    if (!selectedFile) throw new Error("No file selected");
+
+    setPublicLinkLoading(true);
+    setPublicLinkError(null);
+
+    try {
+      const response = await api.post(`/${selectedFile.id}/createPublicLink`);
+      const publicLink = response.data; // The backend returns the link as a string
+
+      setNotification({
+        open: true,
+        message: "Public link created successfully!",
+      });
+
+      return publicLink;
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || "Failed to create public link.";
+      setPublicLinkError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setPublicLinkLoading(false);
+    }
+  };
+
+  // Update your handleCloseShareDialog function
+  const handleCloseShareDialog = () => {
+    setShareDialogOpen(false);
+    setSelectedFile(null);
+    setPublicLinkError(null); // Reset public link error
+  };
 
   console.log("Current folder ID:", currentFolderId);
   console.log("All files:", myFiles);
@@ -808,9 +994,12 @@ const DashboardPage: React.FC = () => {
           open={shareDialogOpen}
           onClose={handleCloseShareDialog}
           onShare={handleShareFile}
+          onCreatePublicLink={handleCreatePublicLink}
           fileName={selectedFile.originalFileName}
           loading={shareLoading}
           error={shareError}
+          publicLinkLoading={publicLinkLoading}
+          publicLinkError={publicLinkError}
         />
       )}
 
