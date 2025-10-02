@@ -42,6 +42,7 @@ import {
   ArrowBack as ArrowBackIcon,
   FolderOpen as FolderOpenIcon,
   InsertDriveFile as FileIcon,
+  Delete as DeleteIcon,
 } from "@mui/icons-material";
 import {
   ContentCopy as CopyIcon,
@@ -331,7 +332,39 @@ interface CreateFolderDialogProps {
   error: string | null;
   currentFolderId?: string;
 }
+interface DeleteConfirmationDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  itemName: string;
+  loading: boolean;
+}
 
+const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
+  open,
+  onClose,
+  onConfirm,
+  itemName,
+  loading,
+}) => {
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Confirm Deletion</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Are you sure you want to delete "{itemName}"? This action cannot be
+          undone.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onConfirm} color="error" disabled={loading}>
+          {loading ? <CircularProgress size={24} /> : "Delete"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
   open,
   onClose,
@@ -408,6 +441,13 @@ const DashboardPage: React.FC = () => {
   const [folderHistory, setFolderHistory] = useState<
     Array<{ id: string | null; name: string }>
   >([{ id: null, name: "Home" }]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{
+    id: string;
+    name: string;
+    type: "file" | "folder";
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Share dialog state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -633,6 +673,42 @@ const DashboardPage: React.FC = () => {
       console.error(err);
     } finally {
       setShareLoading(false);
+    }
+  };
+
+  const handleOpenDeleteDialog = (
+    id: string,
+    name: string,
+    type: "file" | "folder"
+  ) => {
+    setItemToDelete({ id, name, type });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+
+    setDeleteLoading(true);
+    try {
+      // For now, we only handle file deletion as per your backend endpoint
+      if (itemToDelete.type === "file") {
+        await api.get(`/${itemToDelete.id}/delete`); // Use GET as per your endpoint
+        setNotification({
+          open: true,
+          message: "File deleted successfully!",
+        });
+        fetchMyFiles(); // Refresh the file list to show the change
+      }
+      // You can add folder deletion logic here later if needed
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || `Failed to delete ${itemToDelete.type}.`
+      );
+      console.error(err);
+    } finally {
+      setDeleteLoading(false);
+      setDeleteDialogOpen(false);
+      setItemToDelete(null); // Clear the item
     }
   };
 
@@ -940,6 +1016,20 @@ const DashboardPage: React.FC = () => {
                                 <DownloadIcon />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Delete">
+                              <IconButton
+                                color="error"
+                                onClick={() =>
+                                  handleOpenDeleteDialog(
+                                    file.id,
+                                    file.originalFileName,
+                                    "file"
+                                  )
+                                }
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1033,7 +1123,15 @@ const DashboardPage: React.FC = () => {
         error={createFolderError}
         currentFolderId={currentFolderId || undefined}
       />
-
+      {itemToDelete && (
+        <DeleteConfirmationDialog
+          open={deleteDialogOpen}
+          onClose={() => setDeleteDialogOpen(false)}
+          onConfirm={handleConfirmDelete}
+          itemName={itemToDelete.name}
+          loading={deleteLoading}
+        />
+      )}
       {/* Notification Snackbar */}
       <Snackbar
         open={notification.open}
