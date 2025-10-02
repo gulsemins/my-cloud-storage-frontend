@@ -30,6 +30,7 @@ import {
   Link,
   Chip,
   InputAdornment,
+  MenuItem,
 } from "@mui/material";
 import {
   UploadFile as UploadFileIcon,
@@ -51,6 +52,7 @@ import { format } from "date-fns";
 import { filesize } from "filesize";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import axios from "axios";
 
 // Type definitions
 interface UploadedFile {
@@ -96,7 +98,8 @@ interface ShareDialogProps {
   open: boolean;
   onClose: () => void;
   onShare: (username: string) => Promise<void>;
-  onCreatePublicLink: () => Promise<string>;
+  // onCreatePublicLink fonksiyonunun artık expirationHours parametresi alacağını belirt
+  onCreatePublicLink: (expirationHours: number) => Promise<string>;
   fileName: string;
   loading: boolean;
   error: string | null;
@@ -119,6 +122,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   const [activeTab, setActiveTab] = useState(0);
   const [publicLink, setPublicLink] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [expirationHours, setExpirationHours] = useState(24);
 
   const handleShareClick = () => {
     onShare(username);
@@ -126,7 +130,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
 
   const handleCreatePublicLink = async () => {
     try {
-      const link = await onCreatePublicLink();
+      const link = await onCreatePublicLink(expirationHours);
       setPublicLink(link);
     } catch (error) {
       // Error is handled in the parent component
@@ -148,6 +152,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
     setPublicLink("");
     setLinkCopied(false);
     setActiveTab(0);
+    setExpirationHours(24);
     onClose();
   };
 
@@ -205,8 +210,8 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
 
         <TabPanel value={activeTab} index={1}>
           <DialogContentText sx={{ mb: 2 }}>
-            Create a public link that anyone can use to download this file. The
-            link will expire in 24 hours.
+            Create a public link that anyone can use to download this file.
+            Please select an expiration time.
           </DialogContentText>
 
           {publicLinkError && (
@@ -217,6 +222,23 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
 
           {!publicLink ? (
             <Box sx={{ textAlign: "center", py: 2 }}>
+              {/* YENİ: Geçerlilik süresi seçim alanı */}
+              <TextField
+                select
+                label="Link Expiration"
+                value={expirationHours}
+                onChange={(e) => setExpirationHours(Number(e.target.value))}
+                variant="outlined"
+                fullWidth
+                sx={{ mb: 2 }}
+              >
+                <MenuItem value={1}>1 Hour</MenuItem>
+                <MenuItem value={6}>6 Hours</MenuItem>
+                <MenuItem value={24}>24 Hours (1 Day)</MenuItem>
+                <MenuItem value={168}>7 Days</MenuItem>
+                <MenuItem value={720}>30 Days</MenuItem>
+              </TextField>
+
               <Button
                 variant="contained"
                 startIcon={<LinkIcon />}
@@ -478,36 +500,32 @@ const DashboardPage: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("file", file);
-
-    // Debug: Log what we're sending
-    console.log("Current folder ID:", currentFolderId);
-    console.log("Folder history:", folderHistory);
-
-    if (currentFolderId) {
-      formData.append("folderId", currentFolderId);
-      console.log("Adding folderId to form data:", currentFolderId);
-    } else {
-      console.log("No folder ID - uploading to root");
-    }
-
-    // Debug: Check FormData contents
-    for (let pair of formData.entries()) {
-      console.log("FormData:", pair[0], pair[1]);
-    }
-
     setUploading(true);
     setError("");
+
     try {
-      const response = await api.post("/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      // 1. Presign isteği at
+      const presignedResult = await api.post(
+        `/presignUpload${
+          currentFolderId ? `?folderId=${currentFolderId}` : ""
+        }`,
+        {
+          originalFileName: file.name,
+          contentType: file.type,
+          size: file.size,
+        }
+      );
+
+      // 2. Dönen URL'ye PUT isteği yap
+      await axios.put(presignedResult.data.url, file, {
+        headers: {
+          "Content-Type": file.type,
+        },
       });
-      console.log("Upload response:", response.data);
 
       setNotification({ open: true, message: "File uploaded successfully!" });
 
-      // Wait a moment then refresh to ensure backend processing is complete
+      // 3. Dosya/folder listesini yenile
       setTimeout(async () => {
         await fetchMyFiles();
         await fetchFolders();
@@ -517,7 +535,6 @@ const DashboardPage: React.FC = () => {
         err.response?.data?.message || err.message || "Unknown error";
       setError("File upload failed: " + errorMessage);
       console.error("Upload error:", err);
-      console.error("Error response:", err.response?.data);
     } finally {
       setUploading(false);
       event.target.value = "";
@@ -630,14 +647,18 @@ const DashboardPage: React.FC = () => {
     }
   });
 
-  const handleCreatePublicLink = async (): Promise<string> => {
+  const handleCreatePublicLink = async (
+    expirationHours: number
+  ): Promise<string> => {
     if (!selectedFile) throw new Error("No file selected");
 
     setPublicLinkLoading(true);
     setPublicLinkError(null);
 
     try {
-      const response = await api.post(`/${selectedFile.id}/createPublicLink`);
+      const response = await api.post(`/${selectedFile.id}/createPublicLink`, {
+        expirationHours: expirationHours, // Backend'in beklediği DTO'ya uygun olarak
+      });
       const publicLink = response.data; // The backend returns the link as a string
 
       setNotification({
@@ -994,7 +1015,7 @@ const DashboardPage: React.FC = () => {
           open={shareDialogOpen}
           onClose={handleCloseShareDialog}
           onShare={handleShareFile}
-          onCreatePublicLink={handleCreatePublicLink}
+          onCreatePublicLink={handleCreatePublicLink} // Güncellenmiş fonksiyonu prop olarak geç
           fileName={selectedFile.originalFileName}
           loading={shareLoading}
           error={shareError}
