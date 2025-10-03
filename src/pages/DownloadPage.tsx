@@ -35,7 +35,7 @@ const PublicDownloadPage: React.FC = () => {
       try {
         setLoading(true);
         const response = await axios.get(
-          `http://localhost:8080/${fileId}/publicDownload`
+          `http://localhost:8080/file/${fileId}/publicDownload`
         );
 
         if (response.data) {

@@ -469,7 +469,7 @@ const DashboardPage: React.FC = () => {
   const fetchMyFiles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get<UploadedFile[]>("/files");
+      const response = await api.get<UploadedFile[]>("/file/getAllFiles");
       console.log("Raw files from backend:", response.data);
 
       // Debug: Check each file's folder association
@@ -494,10 +494,12 @@ const DashboardPage: React.FC = () => {
       let response;
       if (currentFolderId) {
         // Fetch subfolders of current folder
-        response = await api.get<Folder[]>(`/subFolders/${currentFolderId}`);
+        response = await api.get<Folder[]>(
+          `/folder/subFolders/${currentFolderId}`
+        );
       } else {
         // Fetch root level folders (folders with no parent)
-        response = await api.get<Folder[]>("/folders");
+        response = await api.get<Folder[]>("/folder/allRootFolders");
       }
       setFolders(response.data);
       console.log("Fetched folders:", response.data); // Debug log
@@ -512,7 +514,7 @@ const DashboardPage: React.FC = () => {
   const fetchSharedFiles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get<SharedFile[]>("/shared-with-me");
+      const response = await api.get<SharedFile[]>("/file/shared-with-me");
       setSharedFiles(response.data);
     } catch (err) {
       setError("Failed to fetch files shared with you.");
@@ -548,7 +550,7 @@ const DashboardPage: React.FC = () => {
     try {
       // 1. Presign isteği at
       const presignedResult = await api.post(
-        `/presignUpload${
+        `/file/presignUpload${
           currentFolderId ? `?folderId=${currentFolderId}` : ""
         }`,
         {
@@ -585,7 +587,7 @@ const DashboardPage: React.FC = () => {
 
   const handleFileDownload = async (fileId: string, fileName: string) => {
     try {
-      const response = await api.get(`/${fileId}/download`, {
+      const response = await api.get(`/file/${fileId}/download`, {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -606,7 +608,7 @@ const DashboardPage: React.FC = () => {
     setCreateFolderLoading(true);
     setCreateFolderError(null);
     try {
-      await api.post("/createFolders", {
+      await api.post("/folder/createFolders", {
         name,
         parentFolderId: parentFolderId || null,
       });
@@ -658,7 +660,7 @@ const DashboardPage: React.FC = () => {
     setShareLoading(true);
     setShareError(null);
     try {
-      await api.post("/share", {
+      await api.post("/file/share", {
         fileId: selectedFile.id,
         sharedWithUsername: username,
       });
@@ -692,16 +694,14 @@ const DashboardPage: React.FC = () => {
 
     setDeleteLoading(true);
     try {
-      // For now, we only handle file deletion as per your backend endpoint
       if (itemToDelete.type === "file") {
-        await api.get(`/${itemToDelete.id}/delete`); // Use GET as per your endpoint
+        await api.delete(`/file/${itemToDelete.id}`);
         setNotification({
           open: true,
           message: "File deleted successfully!",
         });
         fetchMyFiles(); // Refresh the file list to show the change
       } else {
-        // YENİ: Klasör silme
         await api.delete(`/folder/${itemToDelete.id}`);
         setNotification({
           open: true,
@@ -748,9 +748,12 @@ const DashboardPage: React.FC = () => {
     setPublicLinkError(null);
 
     try {
-      const response = await api.post(`/${selectedFile.id}/createPublicLink`, {
-        expirationHours: expirationHours, // Backend'in beklediği DTO'ya uygun olarak
-      });
+      const response = await api.post(
+        `/file/${selectedFile.id}/createPublicLink`,
+        {
+          expirationHours: expirationHours, // Backend'in beklediği DTO'ya uygun olarak
+        }
+      );
       const publicLink = response.data; // The backend returns the link as a string
 
       setNotification({
