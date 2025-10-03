@@ -337,6 +337,7 @@ interface DeleteConfirmationDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   itemName: string;
+  itemType: "file" | "folder";
   loading: boolean;
 }
 
@@ -345,6 +346,7 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
   onClose,
   onConfirm,
   itemName,
+  itemType,
   loading,
 }) => {
   return (
@@ -698,8 +700,22 @@ const DashboardPage: React.FC = () => {
           message: "File deleted successfully!",
         });
         fetchMyFiles(); // Refresh the file list to show the change
+      } else {
+        // YENİ: Klasör silme
+        await api.delete(`/folder/${itemToDelete.id}`);
+        setNotification({
+          open: true,
+          message: "Folder deleted successfully!",
+        });
+
+        // Eğer silinen klasörün içindeysek, üst klasöre dön
+        if (currentFolderId === itemToDelete.id) {
+          handleBackClick();
+        }
+
+        fetchFolders();
+        fetchMyFiles();
       }
-      // You can add folder deletion logic here later if needed
     } catch (err: any) {
       setError(
         err.response?.data?.message || `Failed to delete ${itemToDelete.type}.`
@@ -966,6 +982,23 @@ const DashboardPage: React.FC = () => {
                                 <FolderOpenIcon />
                               </IconButton>
                             </Tooltip>
+
+                            <Tooltip title="Delete Folder">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Klasörü açmasını engelle
+                                  handleOpenDeleteDialog(
+                                    folder.id,
+                                    folder.name,
+                                    "folder"
+                                  );
+                                }}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1129,6 +1162,7 @@ const DashboardPage: React.FC = () => {
           onClose={() => setDeleteDialogOpen(false)}
           onConfirm={handleConfirmDelete}
           itemName={itemToDelete.name}
+          itemType={itemToDelete.type}
           loading={deleteLoading}
         />
       )}
