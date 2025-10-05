@@ -14,6 +14,9 @@ import {
   TableRow,
   Paper,
   IconButton,
+  Menu,
+  ListItemIcon,
+  ListItemText,
   AppBar,
   Toolbar,
   Snackbar,
@@ -40,10 +43,10 @@ import {
   Share as ShareIcon,
   CreateNewFolder as CreateNewFolderIcon,
   ArrowBack as ArrowBackIcon,
-  FolderOpen as FolderOpenIcon,
   InsertDriveFile as FileIcon,
-  Delete as DeleteIcon,
 } from "@mui/icons-material";
+import { MoreVert as MoreVertIcon } from "@mui/icons-material";
+import { Delete as DeleteIcon, Edit as EditIcon } from "@mui/icons-material";
 import {
   ContentCopy as CopyIcon,
   Link as LinkIcon,
@@ -451,6 +454,36 @@ const DashboardPage: React.FC = () => {
   } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Actions menu state
+  const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(
+    null
+  );
+  const [actionsTarget, setActionsTarget] = useState<{
+    id: string;
+    type: "file" | "folder";
+    file?: UploadedFile;
+    folder?: Folder;
+  } | null>(null);
+
+  const openActionsMenu = (
+    event: React.MouseEvent<HTMLElement>,
+    target: {
+      id: string;
+      type: "file" | "folder";
+      file?: UploadedFile;
+      folder?: Folder;
+    }
+  ) => {
+    event.stopPropagation();
+    setActionsAnchorEl(event.currentTarget);
+    setActionsTarget(target);
+  };
+
+  const closeActionsMenu = () => {
+    setActionsAnchorEl(null);
+    setActionsTarget(null);
+  };
+
   // Share dialog state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
@@ -463,6 +496,13 @@ const DashboardPage: React.FC = () => {
   const [createFolderError, setCreateFolderError] = useState<string | null>(
     null
   );
+
+  // Rename folder dialog state
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameLoading, setRenameLoading] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState<string>("");
+  const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
 
   const { logout } = useAuth();
 
@@ -587,20 +627,34 @@ const DashboardPage: React.FC = () => {
 
   const handleFileDownload = async (fileId: string, fileName: string) => {
     try {
-      const response = await api.get(`/file/${fileId}/download`, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const response = await api.get(`/file/${fileId}/download`);
+      const presignedUrl = response.data;
+
+      // Fetch ile dosyayı blob olarak indir
+      const fileResponse = await fetch(presignedUrl);
+
+      if (!fileResponse.ok) {
+        throw new Error("Download failed");
+      }
+
+      const blob = await fileResponse.blob();
+
+      // Blob'u indirilebilir link olarak oluştur
+      const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", fileName);
+      link.href = blobUrl;
+      link.download = fileName; // download attribute ZORUNLU
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+
+      setNotification({ open: true, message: "File downloaded successfully!" });
+    } catch (err: any) {
+      console.error("Download error:", err);
       setError("File download failed. You may not have permission.");
-      console.error(err);
     }
   };
 
@@ -687,6 +741,53 @@ const DashboardPage: React.FC = () => {
   ) => {
     setItemToDelete({ id, name, type });
     setDeleteDialogOpen(true);
+  };
+
+  const handleOpenRenameDialog = (folder: Folder) => {
+    setFolderToRename(folder);
+    setRenameValue(folder.name);
+    setRenameError(null);
+    setRenameDialogOpen(true);
+    closeActionsMenu();
+  };
+
+  const handleConfirmRename = async () => {
+    if (!folderToRename) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) return setRenameError("Name cannot be empty");
+
+    setRenameLoading(true);
+    setRenameError(null);
+    try {
+      const response = await api.put(
+        `/folder/${folderToRename.id}/changeName`,
+        { name: trimmed }
+      );
+
+      setNotification({ open: true, message: "Folder renamed successfully!" });
+
+      // Update folder list in-place so folder doesn't move
+      setFolders((prev) =>
+        prev.map((f) =>
+          f.id === folderToRename.id ? { ...f, name: trimmed } : f
+        )
+      );
+
+      // If the renamed folder is in history, update its name there
+      setFolderHistory((prev) =>
+        prev.map((f) =>
+          f.id === folderToRename.id ? { ...f, name: trimmed } : f
+        )
+      );
+
+      setRenameDialogOpen(false);
+      setFolderToRename(null);
+    } catch (err: any) {
+      setRenameError(err.response?.data?.message || "Failed to rename folder.");
+      console.error("Rename error:", err);
+    } finally {
+      setRenameLoading(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -979,29 +1080,17 @@ const DashboardPage: React.FC = () => {
                                 color="primary"
                                 onClick={(e) => {
                                   e.stopPropagation(); // Prevent double navigation
-                                  handleFolderDoubleClick(folder);
+                                  openActionsMenu(e, {
+                                    id: folder.id,
+                                    type: "folder",
+                                    folder,
+                                  });
                                 }}
                               >
-                                <FolderOpenIcon />
+                                <MoreVertIcon />
                               </IconButton>
                             </Tooltip>
-
-                            <Tooltip title="Delete Folder">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Klasörü açmasını engelle
-                                  handleOpenDeleteDialog(
-                                    folder.id,
-                                    folder.name,
-                                    "folder"
-                                  );
-                                }}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Tooltip>
+                            {/* Delete moved into actions menu */}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1031,41 +1120,26 @@ const DashboardPage: React.FC = () => {
                             {format(new Date(file.uploadedAt), "Pp")}
                           </TableCell>
                           <TableCell align="center">
-                            <Tooltip title="Share">
-                              <IconButton
-                                color="primary"
-                                onClick={() => handleOpenShareDialog(file)}
-                              >
-                                <ShareIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Download">
-                              <IconButton
-                                color="primary"
-                                onClick={() =>
-                                  handleFileDownload(
-                                    file.id,
-                                    file.originalFileName
-                                  )
-                                }
-                              >
-                                <DownloadIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete">
-                              <IconButton
-                                color="error"
-                                onClick={() =>
-                                  handleOpenDeleteDialog(
-                                    file.id,
-                                    file.originalFileName,
-                                    "file"
-                                  )
-                                }
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Tooltip>
+                            {/* Actions dropdown menu for file */}
+                            <IconButton
+                              size="small"
+                              onClick={(e) =>
+                                openActionsMenu(e, {
+                                  id: file.id,
+                                  type: "file",
+                                  file,
+                                })
+                              }
+                              aria-controls={
+                                actionsAnchorEl ? "actions-menu" : undefined
+                              }
+                              aria-haspopup="true"
+                              aria-expanded={
+                                actionsAnchorEl ? "true" : undefined
+                              }
+                            >
+                              <MoreVertIcon />
+                            </IconButton>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1176,6 +1250,152 @@ const DashboardPage: React.FC = () => {
         onClose={() => setNotification({ ...notification, open: false })}
         message={notification.message}
       />
+
+      {/* Actions Menu (single instance used for files and folders) */}
+      <Menu
+        id="actions-menu"
+        anchorEl={actionsAnchorEl}
+        open={Boolean(actionsAnchorEl)}
+        onClose={closeActionsMenu}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {actionsTarget?.type === "file" ? (
+          <>
+            <MenuItem
+              onClick={() => {
+                if (actionsTarget?.file)
+                  handleOpenShareDialog(actionsTarget.file);
+                closeActionsMenu();
+              }}
+            >
+              <ListItemIcon>
+                <ShareIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Share</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (actionsTarget?.id && actionsTarget?.file)
+                  handleFileDownload(
+                    actionsTarget.id,
+                    actionsTarget.file.originalFileName
+                  );
+                closeActionsMenu();
+              }}
+            >
+              <ListItemIcon>
+                <DownloadIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Download</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (actionsTarget?.id && actionsTarget?.file) {
+                  // Open share dialog where user can create public link
+                  handleOpenShareDialog(actionsTarget.file);
+                }
+                closeActionsMenu();
+              }}
+            >
+              <ListItemIcon>
+                <LinkIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Create Public Link</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (actionsTarget?.id && actionsTarget?.file)
+                  handleOpenDeleteDialog(
+                    actionsTarget.id,
+                    actionsTarget.file.originalFileName,
+                    "file"
+                  );
+                closeActionsMenu();
+              }}
+            >
+              <ListItemIcon>
+                <DeleteIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Delete</ListItemText>
+            </MenuItem>
+          </>
+        ) : (
+          <>
+            <MenuItem
+              onClick={() => {
+                if (actionsTarget?.id && actionsTarget?.folder) {
+                  handleOpenRenameDialog(actionsTarget.folder);
+                } else {
+                  closeActionsMenu();
+                }
+              }}
+            >
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Rename</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (actionsTarget?.id && actionsTarget?.folder)
+                  handleOpenDeleteDialog(
+                    actionsTarget.id,
+                    actionsTarget.folder.name,
+                    "folder"
+                  );
+                closeActionsMenu();
+              }}
+            >
+              <ListItemIcon>
+                <DeleteIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Delete</ListItemText>
+            </MenuItem>
+          </>
+        )}
+      </Menu>
+
+      {/* Rename Folder Dialog */}
+      <Dialog
+        open={renameDialogOpen}
+        onClose={() => setRenameDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Rename Folder</DialogTitle>
+        <DialogContent>
+          {renameError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {renameError}
+            </Alert>
+          )}
+          <TextField
+            autoFocus
+            margin="dense"
+            id="renameFolderName"
+            label="New Folder Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && renameValue.trim()) {
+                handleConfirmRename();
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmRename}
+            disabled={renameLoading || !renameValue.trim()}
+          >
+            {renameLoading ? <CircularProgress size={24} /> : "Rename"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
