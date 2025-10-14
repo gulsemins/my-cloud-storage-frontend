@@ -56,18 +56,11 @@ import { format } from "date-fns";
 import { filesize } from "filesize";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import FilePreviewModal from "../components/FilePreviewModal";
 import axios from "axios";
 
 // Type definitions
-interface UploadedFile {
-  id: string;
-  originalFileName: string;
-  storedFileName: string;
-  size: number;
-  uploadedAt: string;
-  createdAt: string;
-  folderId: string | null; // Updated to match your DTO
-}
+import type { UploadedFile } from "../types"; // Import the correct type from your types folder
 
 interface SharedFile {
   id: string;
@@ -453,7 +446,7 @@ const DashboardPage: React.FC = () => {
     type: "file" | "folder";
   } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-
+  const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   // Actions menu state
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(
     null
@@ -577,7 +570,14 @@ const DashboardPage: React.FC = () => {
     fetchFolders,
     fetchSharedFiles,
   ]);
+  const handleFileClick = (file: UploadedFile) => {
+    setPreviewFile(file);
+  };
 
+  // Modal'ı kapatma fonksiyonu
+  const handleClosePreview = () => {
+    setPreviewFile(null);
+  };
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -1009,7 +1009,8 @@ const DashboardPage: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {folders.length === 0 && currentFolderFiles.length === 0 ? (
+                  {/* Durum 1: Gösterilecek hiçbir şey yoksa (ne klasör ne de dosya) */}
+                  {folders.length === 0 && currentFolderFiles.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} align="center">
                         <Typography variant="subtitle1" sx={{ p: 3 }}>
@@ -1019,132 +1020,114 @@ const DashboardPage: React.FC = () => {
                         </Typography>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    <>
-                      {/* Render folders first */}
-                      {folders.map((folder) => (
-                        <TableRow
-                          key={folder.id}
-                          hover
-                          onClick={() => handleFolderDoubleClick(folder)}
+                  )}
+
+                  {/* Durum 2: Klasörleri render et */}
+                  {folders.map((folder) => (
+                    <TableRow
+                      key={folder.id}
+                      hover
+                      onDoubleClick={() => handleFolderDoubleClick(folder)} // Klasörlere çift tıklanır
+                      sx={{
+                        cursor: "pointer",
+                        "&:hover": {
+                          backgroundColor: "action.hover",
+                          "& .folder-name": {
+                            color: "primary.main",
+                          },
+                        },
+                      }}
+                    >
+                      <TableCell component="th" scope="row">
+                        <Box
                           sx={{
-                            cursor: "pointer",
-                            "&:hover": {
-                              backgroundColor: "action.hover",
-                              "& .folder-name": {
-                                color: "primary.main",
-                              },
-                            },
+                            display: "flex",
+                            alignItems: "center",
+                            "&:hover": { color: "primary.main" },
                           }}
                         >
-                          <TableCell component="th" scope="row">
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                "&:hover": {
-                                  color: "primary.main",
-                                },
-                              }}
-                            >
-                              <FolderIcon
-                                sx={{ mr: 1, color: "primary.main" }}
-                              />
-                              <Typography
-                                className="folder-name"
-                                variant="body1"
-                                sx={{
-                                  transition: "color 0.2s",
-                                }}
-                              >
-                                {folder.name}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label="Folder"
-                              size="small"
-                              color="primary"
-                              variant="outlined"
-                            />
-                          </TableCell>
-                          <TableCell align="right">—</TableCell>
-                          <TableCell align="right">
-                            {format(new Date(folder.createdAt), "Pp")}
-                          </TableCell>
-                          <TableCell align="center">
-                            <Tooltip title="Open Folder">
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Prevent double navigation
-                                  openActionsMenu(e, {
-                                    id: folder.id,
-                                    type: "folder",
-                                    folder,
-                                  });
-                                }}
-                              >
-                                <MoreVertIcon />
-                              </IconButton>
-                            </Tooltip>
-                            {/* Delete moved into actions menu */}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                          <FolderIcon sx={{ mr: 1, color: "primary.main" }} />
+                          <Typography
+                            className="folder-name"
+                            variant="body1"
+                            sx={{ transition: "color 0.2s" }}
+                          >
+                            {folder.name}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label="Folder"
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell align="right">—</TableCell>
+                      <TableCell align="right">
+                        {format(new Date(folder.createdAt), "Pp")}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="Actions">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Satırın onDoubleClick olayını engelle
+                              openActionsMenu(e, {
+                                id: folder.id,
+                                type: "folder",
+                                folder,
+                              });
+                            }}
+                          >
+                            <MoreVertIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
 
-                      {/* Then render files */}
-                      {currentFolderFiles.map((file) => (
-                        <TableRow key={file.id} hover>
-                          <TableCell component="th" scope="row">
-                            <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <FileIcon
-                                sx={{ mr: 1, color: "text.secondary" }}
-                              />
-                              {file.originalFileName}
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label="File"
-                              size="small"
-                              variant="outlined"
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {filesize(file.size)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {format(new Date(file.uploadedAt), "Pp")}
-                          </TableCell>
-                          <TableCell align="center">
-                            {/* Actions dropdown menu for file */}
-                            <IconButton
-                              size="small"
-                              onClick={(e) =>
-                                openActionsMenu(e, {
-                                  id: file.id,
-                                  type: "file",
-                                  file,
-                                })
-                              }
-                              aria-controls={
-                                actionsAnchorEl ? "actions-menu" : undefined
-                              }
-                              aria-haspopup="true"
-                              aria-expanded={
-                                actionsAnchorEl ? "true" : undefined
-                              }
-                            >
-                              <MoreVertIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </>
-                  )}
+                  {/* Durum 3: Dosyaları render et */}
+                  {currentFolderFiles.map((file) => (
+                    <TableRow
+                      key={file.id}
+                      hover
+                      onClick={() => handleFileClick(file)} // Dosyalara önizleme için tek tıklanır
+                      sx={{ cursor: "pointer" }}
+                    >
+                      <TableCell component="th" scope="row">
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <FileIcon sx={{ mr: 1, color: "text.secondary" }} />
+                          {file.originalFileName}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label="File" size="small" variant="outlined" />
+                      </TableCell>
+                      <TableCell align="right">{filesize(file.size)}</TableCell>
+                      <TableCell align="right">
+                        {format(new Date(file.uploadedAt), "Pp")}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="Actions">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Satırın onClick olayını engelle
+                              openActionsMenu(e, {
+                                id: file.id,
+                                type: "file",
+                                file,
+                              });
+                            }}
+                          >
+                            <MoreVertIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             ) : (
@@ -1209,6 +1192,12 @@ const DashboardPage: React.FC = () => {
         )}
       </Container>
 
+      {/* YENİ ÖNİZLEME MODALI */}
+      <FilePreviewModal
+        file={previewFile}
+        open={!!previewFile}
+        onClose={handleClosePreview}
+      />
       {/* Share Dialog */}
       {selectedFile && (
         <ShareDialog
@@ -1252,6 +1241,7 @@ const DashboardPage: React.FC = () => {
       />
 
       {/* Actions Menu (single instance used for files and folders) */}
+      {/* Actions Menu (single instance used for files and folders) */}
       <Menu
         id="actions-menu"
         anchorEl={actionsAnchorEl}
@@ -1259,100 +1249,87 @@ const DashboardPage: React.FC = () => {
         onClose={closeActionsMenu}
         onClick={(e) => e.stopPropagation()}
       >
-        {actionsTarget?.type === "file" ? (
-          <>
-            <MenuItem
-              onClick={() => {
-                if (actionsTarget?.file)
-                  handleOpenShareDialog(actionsTarget.file);
-                closeActionsMenu();
-              }}
-            >
-              <ListItemIcon>
-                <ShareIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Share</ListItemText>
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                if (actionsTarget?.id && actionsTarget?.file)
-                  handleFileDownload(
-                    actionsTarget.id,
-                    actionsTarget.file.originalFileName
-                  );
-                closeActionsMenu();
-              }}
-            >
-              <ListItemIcon>
-                <DownloadIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Download</ListItemText>
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                if (actionsTarget?.id && actionsTarget?.file) {
-                  // Open share dialog where user can create public link
-                  handleOpenShareDialog(actionsTarget.file);
-                }
-                closeActionsMenu();
-              }}
-            >
-              <ListItemIcon>
-                <LinkIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Create Public Link</ListItemText>
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                if (actionsTarget?.id && actionsTarget?.file)
-                  handleOpenDeleteDialog(
-                    actionsTarget.id,
-                    actionsTarget.file.originalFileName,
-                    "file"
-                  );
-                closeActionsMenu();
-              }}
-            >
-              <ListItemIcon>
-                <DeleteIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </>
-        ) : (
-          <>
-            <MenuItem
-              onClick={() => {
-                if (actionsTarget?.id && actionsTarget?.folder) {
-                  handleOpenRenameDialog(actionsTarget.folder);
-                } else {
+        {actionsTarget?.type === "file"
+          ? [
+              <MenuItem
+                key="share"
+                onClick={() => {
+                  if (actionsTarget?.file)
+                    handleOpenShareDialog(actionsTarget.file);
                   closeActionsMenu();
-                }
-              }}
-            >
-              <ListItemIcon>
-                <EditIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Rename</ListItemText>
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                if (actionsTarget?.id && actionsTarget?.folder)
-                  handleOpenDeleteDialog(
-                    actionsTarget.id,
-                    actionsTarget.folder.name,
-                    "folder"
-                  );
-                closeActionsMenu();
-              }}
-            >
-              <ListItemIcon>
-                <DeleteIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </>
-        )}
+                }}
+              >
+                <ListItemIcon>
+                  <ShareIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Share</ListItemText>
+              </MenuItem>,
+              <MenuItem
+                key="download"
+                onClick={() => {
+                  if (actionsTarget?.id && actionsTarget?.file)
+                    handleFileDownload(
+                      actionsTarget.id,
+                      actionsTarget.file.originalFileName
+                    );
+                  closeActionsMenu();
+                }}
+              >
+                <ListItemIcon>
+                  <DownloadIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Download</ListItemText>
+              </MenuItem>,
+              <MenuItem
+                key="delete"
+                onClick={() => {
+                  if (actionsTarget?.id && actionsTarget?.file)
+                    handleOpenDeleteDialog(
+                      actionsTarget.id,
+                      actionsTarget.file.originalFileName,
+                      "file"
+                    );
+                  closeActionsMenu();
+                }}
+              >
+                <ListItemIcon>
+                  <DeleteIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Delete</ListItemText>
+              </MenuItem>,
+            ]
+          : [
+              <MenuItem
+                key="rename"
+                onClick={() => {
+                  if (actionsTarget?.folder)
+                    handleOpenRenameDialog(actionsTarget.folder);
+                  closeActionsMenu();
+                }}
+              >
+                <ListItemIcon>
+                  <EditIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Rename</ListItemText>
+              </MenuItem>,
+              <MenuItem
+                key="delete"
+                onClick={() => {
+                  if (actionsTarget?.id && actionsTarget?.folder)
+                    handleOpenDeleteDialog(
+                      actionsTarget.id,
+                      actionsTarget.folder.name,
+                      "folder"
+                    );
+                  closeActionsMenu();
+                }}
+              >
+                <ListItemIcon>
+                  <DeleteIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Delete</ListItemText>
+              </MenuItem>,
+            ]}
       </Menu>
 
       {/* Rename Folder Dialog */}

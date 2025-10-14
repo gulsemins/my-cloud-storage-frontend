@@ -16,6 +16,7 @@ export interface Folder {
 export interface UploadedFile {
   id: string;
   originalFileName: string;
+  contentType: string;
   size: number;
   uploadedAt: string;
   createdAt: string;
