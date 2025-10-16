@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Container,
   Box,
@@ -34,6 +34,9 @@ import {
   Chip,
   InputAdornment,
   MenuItem,
+  Grid, // Izgara sistemi için
+  ToggleButton, // Değiştirme butonu
+  ToggleButtonGroup, // Buton grubu
 } from "@mui/material";
 import {
   UploadFile as UploadFileIcon,
@@ -44,6 +47,8 @@ import {
   CreateNewFolder as CreateNewFolderIcon,
   ArrowBack as ArrowBackIcon,
   InsertDriveFile as FileIcon,
+  ViewList as ViewListIcon, // Liste görünümü ikonu
+  ViewModule as ViewModuleIcon, // Izgara görünümü ikonu
 } from "@mui/icons-material";
 import { MoreVert as MoreVertIcon } from "@mui/icons-material";
 import { Delete as DeleteIcon, Edit as EditIcon } from "@mui/icons-material";
@@ -431,6 +436,7 @@ const DashboardPage: React.FC = () => {
     open: false,
     message: "",
   });
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [activeTab, setActiveTab] = useState(0);
   const [publicLinkLoading, setPublicLinkLoading] = useState(false);
   const [publicLinkError, setPublicLinkError] = useState<string | null>(null);
@@ -899,17 +905,29 @@ const DashboardPage: React.FC = () => {
         </Toolbar>
       </AppBar>
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 2,
-          }}
-        >
-          <Typography variant="h4" component="h1">
-            Dashboard
-          </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {/* 2. Görünüm Değiştirme Butonları */}
+          {activeTab === 0 && ( // Sadece "My Files" sekmesindeyken göster
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(event, newView) => {
+                if (newView !== null) {
+                  // Boş seçimi engelle
+                  setViewMode(newView);
+                }
+              }}
+              aria-label="view mode"
+            >
+              <ToggleButton value="list" aria-label="list view">
+                <ViewListIcon />
+              </ToggleButton>
+              <ToggleButton value="grid" aria-label="grid view">
+                <ViewModuleIcon />
+              </ToggleButton>
+            </ToggleButtonGroup>
+          )}
+
           <Box sx={{ display: "flex", gap: 1 }}>
             {activeTab === 0 && (
               <>
@@ -992,82 +1010,205 @@ const DashboardPage: React.FC = () => {
             <CircularProgress />
           </Box>
         ) : (
-          <TableContainer
-            component={Paper}
-            sx={{ maxHeight: "calc(100vh - 350px)", overflow: "auto" }}
-          >
-            {activeTab === 0 ? (
-              // My Files and Folders Table (Bu kısım zaten doğru, aynen bırakıldı)
-              <Table stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell align="right">Size</TableCell>
-                    <TableCell align="right">Date Created</TableCell>
-                    <TableCell align="center">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {folders.length === 0 && currentFolderFiles.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        <Typography variant="subtitle1" sx={{ p: 3 }}>
-                          {currentFolderId
-                            ? "This folder is empty. Upload files or create subfolders!"
-                            : "No files or folders found. Upload your first file or create a folder!"}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-
-                  {folders.map((folder) => (
-                    <TableRow
-                      key={folder.id}
-                      hover
-                      onDoubleClick={() => handleFolderDoubleClick(folder)}
-                      sx={{
-                        cursor: "pointer",
-                        "&:hover": {
-                          backgroundColor: "action.hover",
-                          "& .folder-name": {
-                            color: "primary.main",
-                          },
-                        },
-                      }}
-                    >
-                      <TableCell component="th" scope="row">
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            "&:hover": { color: "primary.main" },
-                          }}
-                        >
-                          <FolderIcon sx={{ mr: 1, color: "primary.main" }} />
-                          <Typography
-                            className="folder-name"
-                            variant="body1"
-                            sx={{ transition: "color 0.2s" }}
+          <>
+            {/* activeTab "My Files" ise... */}
+            {activeTab === 0 && (
+              <>
+                {/* viewMode 'list' ise Tabloyu göster */}
+                {viewMode === "list" && (
+                  <TableContainer
+                    component={Paper}
+                    sx={{ maxHeight: "calc(100vh - 350px)", overflow: "auto" }}
+                  >
+                    <Table stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Name</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell align="right">Size</TableCell>
+                          <TableCell align="right">Date Created</TableCell>
+                          <TableCell align="center">Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {folders.length === 0 &&
+                          currentFolderFiles.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={5} align="center">
+                                <Typography variant="subtitle1" sx={{ p: 3 }}>
+                                  {currentFolderId
+                                    ? "This folder is empty. Upload files or create subfolders!"
+                                    : "No files or folders found. Upload your first file or create a folder!"}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        {folders.map((folder) => (
+                          <TableRow
+                            key={folder.id}
+                            hover
+                            onDoubleClick={() =>
+                              handleFolderDoubleClick(folder)
+                            }
+                            sx={{
+                              cursor: "pointer",
+                              "&:hover": { backgroundColor: "action.hover" },
+                            }}
                           >
-                            {folder.name}
+                            <TableCell>
+                              <Box
+                                sx={{ display: "flex", alignItems: "center" }}
+                              >
+                                <FolderIcon
+                                  sx={{ mr: 1, color: "primary.main" }}
+                                />
+                                {folder.name}
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label="Folder"
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell align="right">—</TableCell>
+                            <TableCell align="right">
+                              {format(new Date(folder.createdAt), "Pp")}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Tooltip title="Actions">
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openActionsMenu(e, {
+                                      id: folder.id,
+                                      type: "folder",
+                                      folder,
+                                    });
+                                  }}
+                                >
+                                  <MoreVertIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {currentFolderFiles.map((file) => (
+                          <TableRow
+                            key={file.id}
+                            hover
+                            onClick={() => handleFileClick(file)}
+                            sx={{ cursor: "pointer" }}
+                          >
+                            <TableCell>
+                              <Box
+                                sx={{ display: "flex", alignItems: "center" }}
+                              >
+                                <FileIcon
+                                  sx={{ mr: 1, color: "text.secondary" }}
+                                />
+                                {file.originalFileName}
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label="File"
+                                size="small"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              {filesize(file.size)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {format(new Date(file.uploadedAt), "Pp")}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Tooltip title="Actions">
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openActionsMenu(e, {
+                                      id: file.id,
+                                      type: "file",
+                                      file,
+                                    });
+                                  }}
+                                >
+                                  <MoreVertIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                {/* viewMode 'grid' ise Izgarayı göster */}
+                {viewMode === "grid" && (
+                  <Grid container columnSpacing={2} sx={{ p: 1 }}>
+                    {folders.length === 0 &&
+                      currentFolderFiles.length === 0 && (
+                        <Box sx={{ width: "100%", textAlign: "center", mt: 4 }}>
+                          <Typography variant="subtitle1" sx={{ p: 3 }}>
+                            {currentFolderId
+                              ? "This folder is empty. Upload files or create subfolders!"
+                              : "No files or folders found. Upload your first file or create a folder!"}
                           </Typography>
                         </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label="Folder"
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell align="right">—</TableCell>
-                      <TableCell align="right">
-                        {format(new Date(folder.createdAt), "Pp")}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Actions">
+                      )}
+                    {folders.map((folder) => (
+                      <Grid
+                        item
+                        key={folder.id}
+                        xs={12}
+                        sm={6}
+                        md={4}
+                        lg={3}
+                        sx={{ mb: 2 }}
+                      >
+                        <Paper
+                          onDoubleClick={() => handleFolderDoubleClick(folder)}
+                          sx={{
+                            p: 2,
+                            textAlign: "center",
+                            cursor: "pointer",
+                            position: "relative",
+                            "&:hover": {
+                              bgcolor: "action.hover",
+                              boxShadow: 3,
+                            },
+                            height: "100%",
+                            display: "flex",
+                            flexDirection: "column",
+                            // --- DEĞİŞİKLİK BURADA: 'center' yerine 'space-between' ---
+                            justifyContent: "space-between",
+                            // Remove duplicate "&:hover" property
+                          }}
+                        >
+                          {/* İkonu ve metni dikeyde ortalamak için bir sarmalayıcı */}
+                          <Box
+                            sx={{
+                              flexGrow: 1,
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "center",
+                              alignItems: "center",
+                            }}
+                          >
+                            <FolderIcon
+                              sx={{ fontSize: 60, color: "primary.main" }}
+                            />
+                          </Box>
+                          <Typography variant="body1" noWrap sx={{ mt: 1 }}>
+                            {folder.name}
+                          </Typography>
                           <IconButton
                             size="small"
                             onClick={(e) => {
@@ -1078,36 +1219,55 @@ const DashboardPage: React.FC = () => {
                                 folder,
                               });
                             }}
+                            sx={{ position: "absolute", top: 8, right: 8 }}
                           >
                             <MoreVertIcon />
                           </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                  {currentFolderFiles.map((file) => (
-                    <TableRow
-                      key={file.id}
-                      hover
-                      onClick={() => handleFileClick(file)}
-                      sx={{ cursor: "pointer" }}
-                    >
-                      <TableCell component="th" scope="row">
-                        <Box sx={{ display: "flex", alignItems: "center" }}>
-                          <FileIcon sx={{ mr: 1, color: "text.secondary" }} />
-                          {file.originalFileName}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip label="File" size="small" variant="outlined" />
-                      </TableCell>
-                      <TableCell align="right">{filesize(file.size)}</TableCell>
-                      <TableCell align="right">
-                        {format(new Date(file.uploadedAt), "Pp")}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Actions">
+                        </Paper>
+                      </Grid>
+                    ))}
+                    {currentFolderFiles.map((file) => (
+                      <Grid
+                        item
+                        key={file.id}
+                        xs={12}
+                        sm={6}
+                        md={4}
+                        lg={3}
+                        sx={{ mb: 2 }}
+                      >
+                        <Paper
+                          onClick={() => handleFileClick(file)}
+                          sx={{
+                            p: 2,
+                            textAlign: "center",
+                            cursor: "pointer",
+                            position: "relative",
+                            "&:hover": {
+                              bgcolor: "action.hover",
+                              boxShadow: 3,
+                            },
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: "100%",
+                              height: 120,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              bgcolor: "background.default",
+                              borderRadius: 1,
+                              mb: 1,
+                            }}
+                          >
+                            <FileIcon
+                              sx={{ fontSize: 60, color: "text.secondary" }}
+                            />
+                          </Box>
+                          <Typography variant="body1" noWrap>
+                            {file.originalFileName}
+                          </Typography>
                           <IconButton
                             size="small"
                             onClick={(e) => {
@@ -1118,79 +1278,90 @@ const DashboardPage: React.FC = () => {
                                 file,
                               });
                             }}
+                            sx={{ position: "absolute", top: 8, right: 8 }}
                           >
                             <MoreVertIcon />
                           </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <Table stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>File Name</TableCell>
-                    <TableCell>Shared By</TableCell>
-                    <TableCell align="right">Size</TableCell>
-                    <TableCell align="right">Date Shared</TableCell>
-                    <TableCell align="center">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {sharedFiles.length === 0 ? (
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+              </>
+            )}
+
+            {/* activeTab "Shared With Me" ise... */}
+            {activeTab === 1 && (
+              <TableContainer
+                component={Paper}
+                sx={{ maxHeight: "calc(100vh - 350px)", overflow: "auto" }}
+              >
+                <Table stickyHeader>
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        <Typography variant="subtitle1" sx={{ p: 3 }}>
-                          No files have been shared with you.
-                        </Typography>
-                      </TableCell>
+                      <TableCell>File Name</TableCell>
+                      <TableCell>Shared By</TableCell>
+                      <TableCell align="right">Size</TableCell>
+                      <TableCell align="right">Date Shared</TableCell>
+                      <TableCell align="center">Actions</TableCell>
                     </TableRow>
-                  ) : (
-                    sharedFiles.map((sharedFile) => (
-                      <TableRow
-                        key={sharedFile.id}
-                        hover
-                        onClick={() => handleFileClick(sharedFile.file)} // 1. Tıklama ile önizlemeyi aç
-                        sx={{ cursor: "pointer" }} // 2. İmleci el işaretine çevir
-                      >
-                        <TableCell component="th" scope="row">
-                          <Box sx={{ display: "flex", alignItems: "center" }}>
-                            <FileIcon sx={{ mr: 1, color: "text.secondary" }} />
-                            {sharedFile.file.originalFileName}
-                          </Box>
-                        </TableCell>
-                        <TableCell>{sharedFile.sharedBy.username}</TableCell>
-                        <TableCell align="right">
-                          {filesize(sharedFile.file.size)}
-                        </TableCell>
-                        <TableCell align="right">
-                          {format(new Date(sharedFile.createdAt), "Pp")}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Tooltip title="Download">
-                            <IconButton
-                              color="primary"
-                              onClick={(e) => {
-                                e.stopPropagation(); // 3. İndir butonuna basınca önizlemenin açılmasını engelle
-                                handleFileDownload(
-                                  sharedFile.file.id,
-                                  sharedFile.file.originalFileName
-                                );
-                              }}
-                            >
-                              <DownloadIcon />
-                            </IconButton>
-                          </Tooltip>
+                  </TableHead>
+                  <TableBody>
+                    {sharedFiles.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          <Typography variant="subtitle1" sx={{ p: 3 }}>
+                            No files have been shared with you.
+                          </Typography>
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    ) : (
+                      sharedFiles.map((sharedFile) => (
+                        <TableRow
+                          key={sharedFile.id}
+                          hover
+                          onClick={() => handleFileClick(sharedFile.file)}
+                          sx={{ cursor: "pointer" }}
+                        >
+                          <TableCell>
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                              <FileIcon
+                                sx={{ mr: 1, color: "text.secondary" }}
+                              />
+                              {sharedFile.file.originalFileName}
+                            </Box>
+                          </TableCell>
+                          <TableCell>{sharedFile.sharedBy.username}</TableCell>
+                          <TableCell align="right">
+                            {filesize(sharedFile.file.size)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {format(new Date(sharedFile.createdAt), "Pp")}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Download">
+                              <IconButton
+                                color="primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleFileDownload(
+                                    sharedFile.file.id,
+                                    sharedFile.file.originalFileName
+                                  );
+                                }}
+                              >
+                                <DownloadIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
-          </TableContainer>
+          </>
         )}
       </Container>
 
