@@ -997,7 +997,7 @@ const DashboardPage: React.FC = () => {
             sx={{ maxHeight: "calc(100vh - 350px)", overflow: "auto" }}
           >
             {activeTab === 0 ? (
-              // My Files and Folders Table
+              // My Files and Folders Table (Bu kısım zaten doğru, aynen bırakıldı)
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
@@ -1009,7 +1009,6 @@ const DashboardPage: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {/* Durum 1: Gösterilecek hiçbir şey yoksa (ne klasör ne de dosya) */}
                   {folders.length === 0 && currentFolderFiles.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} align="center">
@@ -1022,12 +1021,11 @@ const DashboardPage: React.FC = () => {
                     </TableRow>
                   )}
 
-                  {/* Durum 2: Klasörleri render et */}
                   {folders.map((folder) => (
                     <TableRow
                       key={folder.id}
                       hover
-                      onDoubleClick={() => handleFolderDoubleClick(folder)} // Klasörlere çift tıklanır
+                      onDoubleClick={() => handleFolderDoubleClick(folder)}
                       sx={{
                         cursor: "pointer",
                         "&:hover": {
@@ -1073,7 +1071,7 @@ const DashboardPage: React.FC = () => {
                           <IconButton
                             size="small"
                             onClick={(e) => {
-                              e.stopPropagation(); // Satırın onDoubleClick olayını engelle
+                              e.stopPropagation();
                               openActionsMenu(e, {
                                 id: folder.id,
                                 type: "folder",
@@ -1088,12 +1086,11 @@ const DashboardPage: React.FC = () => {
                     </TableRow>
                   ))}
 
-                  {/* Durum 3: Dosyaları render et */}
                   {currentFolderFiles.map((file) => (
                     <TableRow
                       key={file.id}
                       hover
-                      onClick={() => handleFileClick(file)} // Dosyalara önizleme için tek tıklanır
+                      onClick={() => handleFileClick(file)}
                       sx={{ cursor: "pointer" }}
                     >
                       <TableCell component="th" scope="row">
@@ -1114,7 +1111,7 @@ const DashboardPage: React.FC = () => {
                           <IconButton
                             size="small"
                             onClick={(e) => {
-                              e.stopPropagation(); // Satırın onClick olayını engelle
+                              e.stopPropagation();
                               openActionsMenu(e, {
                                 id: file.id,
                                 type: "file",
@@ -1131,7 +1128,6 @@ const DashboardPage: React.FC = () => {
                 </TableBody>
               </Table>
             ) : (
-              // Shared With Me Table
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
@@ -1153,7 +1149,12 @@ const DashboardPage: React.FC = () => {
                     </TableRow>
                   ) : (
                     sharedFiles.map((sharedFile) => (
-                      <TableRow key={sharedFile.id} hover>
+                      <TableRow
+                        key={sharedFile.id}
+                        hover
+                        onClick={() => handleFileClick(sharedFile.file)} // 1. Tıklama ile önizlemeyi aç
+                        sx={{ cursor: "pointer" }} // 2. İmleci el işaretine çevir
+                      >
                         <TableCell component="th" scope="row">
                           <Box sx={{ display: "flex", alignItems: "center" }}>
                             <FileIcon sx={{ mr: 1, color: "text.secondary" }} />
@@ -1171,12 +1172,13 @@ const DashboardPage: React.FC = () => {
                           <Tooltip title="Download">
                             <IconButton
                               color="primary"
-                              onClick={() =>
+                              onClick={(e) => {
+                                e.stopPropagation(); // 3. İndir butonuna basınca önizlemenin açılmasını engelle
                                 handleFileDownload(
                                   sharedFile.file.id,
                                   sharedFile.file.originalFileName
-                                )
-                              }
+                                );
+                              }}
                             >
                               <DownloadIcon />
                             </IconButton>
