@@ -62,6 +62,7 @@ import { filesize } from "filesize";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import FilePreviewModal from "../components/FilePreviewModal";
+import GridItemThumbnail from "../components/GridItemThumbnail";
 import axios from "axios";
 
 // Type definitions
@@ -1252,6 +1253,7 @@ const DashboardPage: React.FC = () => {
                           <Box
                             sx={{
                               width: "100%",
+                              flexGrow: 1,
                               height: 120,
                               display: "flex",
                               alignItems: "center",
@@ -1259,11 +1261,10 @@ const DashboardPage: React.FC = () => {
                               bgcolor: "background.default",
                               borderRadius: 1,
                               mb: 1,
+                              overflow: "hidden",
                             }}
                           >
-                            <FileIcon
-                              sx={{ fontSize: 60, color: "text.secondary" }}
-                            />
+                            <GridItemThumbnail file={file} />
                           </Box>
                           <Typography variant="body1" noWrap>
                             {file.originalFileName}
