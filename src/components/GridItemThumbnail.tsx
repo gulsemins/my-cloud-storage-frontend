@@ -97,3 +97,4 @@ const GridItemThumbnail: React.FC<GridItemThumbnailProps> = ({ file }) => {
 };
 
 export default GridItemThumbnail;
+//test
