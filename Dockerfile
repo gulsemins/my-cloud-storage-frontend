@@ -15,8 +15,8 @@ RUN npm ci
 COPY . .
 
 # Accept build args
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Uygulamayı build ediyoruz
 RUN npm run build
